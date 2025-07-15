@@ -1,0 +1,32 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>随机森林聚类预测</title>
+</head>
+<body>
+  <h2>请输入特征值（以英文逗号分隔）</h2>
+  <input type="text" id="input" placeholder="例如: 0.1, -0.2, 0.3, ..." size="100">
+  <button onclick="predictSample()">预测</button>
+  <p id="result" style="font-weight: bold;"></p>
+
+  <script src="rf_model.js"></script>
+  <script>
+    function predictSample() {
+      const inputText = document.getElementById("input").value;
+      const values = inputText.split(",").map(x => parseFloat(x.trim()));
+      if (values.some(isNaN)) {
+        document.getElementById("result").innerText = "⚠️ 输入格式错误，请输入数字并以逗号分隔。";
+        return;
+      }
+      try {
+        const result = predict(values);
+        document.getElementById("result").innerText = "✅ 预测结果：Cluster " + result;
+      } catch (e) {
+        document.getElementById("result").innerText = "❌ 运行出错：" + e;
+      }
+    }
+  </script>
+</body>
+</html>
