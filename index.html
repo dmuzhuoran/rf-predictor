@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Cluster Prediction Tool</title>
+  <title>Cluster Prediction Tool (Standardized)</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +12,6 @@
   <h3>Single Sample Prediction</h3>
   <form id="predict-form">
     <div class="grid">
-      <!-- Auto-generate input fields -->
 <label>Age<input type="number" step="any" id="Age"></label>
 <label>Female<input type="number" step="any" id="Female"></label>
 <label>Fever<input type="number" step="any" id="Fever"></label>
@@ -51,6 +50,7 @@
   <div id="batch-result"></div>
 
   <script src="rf_model.js"></script>
+  <script src="standardize.js"></script>
   <script>
     const featureList = [
       "Age", "Female", "Fever", "Weight.loss", "Proximal.pain",
@@ -60,8 +60,9 @@
     ];
 
     function predictSingle() {
-      const input = featureList.map(id => parseFloat(document.getElementById(id).value || 0));
-      const cluster = predict(input);
+      const rawInput = featureList.map(id => parseFloat(document.getElementById(id).value || 0));
+      const standardizedInput = standardizeInput(rawInput);
+      const cluster = predict(standardizedInput);
       document.getElementById("single-result").innerText = "Predicted Cluster: " + cluster;
     }
 
@@ -72,10 +73,11 @@
       const reader = new FileReader();
       reader.onload = function (e) {
         const rows = e.target.result.trim().split("\n");
-        const headers = rows[0].split(",");
-        const data = rows.slice(1).map(row => row.split(",").map(parseFloat));
-
-        const results = data.map((sample, idx) => "Sample " + (idx + 1) + ": Cluster " + predict(sample));
+        const data = rows.map(row => row.split(",").map(parseFloat));
+        const results = data.map((sample, idx) => {
+          const standardized = standardizeInput(sample);
+          return "Sample " + (idx + 1) + ": Cluster " + predict(standardized);
+        });
         document.getElementById("batch-result").innerHTML = "<pre>" + results.join("\n") + "</pre>";
       };
       reader.readAsText(fileInput.files[0]);
