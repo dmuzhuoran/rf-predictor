@@ -45,43 +45,76 @@
     <button type="submit">Predict</button>
   </form>
 
+  <hr>
+  <h2>Batch Prediction (CSV)</h2>
+  <input type="file" id="csvFile" accept=".csv">
+  <button onclick="handleCSVUpload()">Upload & Predict</button>
+  <div id="csvResult"></div>
+
   <div id="result"></div>
 
-  <!-- 引入预测函数脚本 -->
   <script src="predict.js"></script>
-
   <script>
     const binary_vars = ["Female", "Fever", "Proximal.pain", "Peripheral.arthritis", "Headache", "Jaw.claudication", "Visual.symptoms", "RF", "CCP", "ANA"];
-    
-    // 等待 DOM 与 JS 函数加载后执行
+    const feature_names = ["Age", "Female", "Fever", "Weight.loss", "Proximal.pain", "Peripheral.arthritis", "Headache", "Jaw.claudication", "Visual.symptoms", "ESR", "CRP", "WBC", "Hb", "PLT", "Neutrophils", "Lymphocytes", "Hct", "RDW", "RF", "CCP", "ANA", "ALT", "AST", "GGT", "ALP", "Albumin"];
+
     document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("predictForm").addEventListener("submit", function (e) {
         e.preventDefault();
         const inputData = {};
         let valid = true;
 
-        const inputs = document.querySelectorAll("input");
-        inputs.forEach(input => {
-          const name = input.name;
-          const value = input.value.trim();
-          if (binary_vars.includes(name) && value !== "0" && value !== "1") {
+        feature_names.forEach(name => {
+          const el = document.getElementsByName(name)[0];
+          const val = el.value.trim();
+          if (binary_vars.includes(name) && val !== "0" && val !== "1") {
             alert(name + " must be 0 or 1.");
             valid = false;
             return;
           }
-          inputData[name] = value === "" ? null : parseFloat(value);
+          inputData[name] = val === "" ? null : parseFloat(val);
         });
 
         if (!valid) return;
 
         try {
           const prediction = predictSingle(inputData);
-          document.getElementById("result").innerText = "Predicted Cluster: Cluster " + prediction;
+          document.getElementById("result").innerText = "Predicted Cluster: Cluster " + (parseInt(prediction) + 1);
         } catch (err) {
           document.getElementById("result").innerText = "❌ Prediction failed: " + err.message;
         }
       });
     });
+
+    function handleCSVUpload() {
+      const fileInput = document.getElementById('csvFile');
+      const file = fileInput.files[0];
+      if (!file) return alert("Please upload a CSV file.");
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const lines = e.target.result.split("\n").filter(l => l.trim() !== "");
+        const header = lines[0].split(',');
+        const rows = lines.slice(1);
+
+        const predictions = rows.map((row, index) => {
+          const values = row.split(',');
+          const data = {};
+          feature_names.forEach((key, i) => {
+            const val = values[i]?.trim();
+            data[key] = val === "" ? null : parseFloat(val);
+          });
+          try {
+            const pred = predictSingle(data);
+            return `Row ${index + 1}: Cluster ${parseInt(pred) + 1}`;
+          } catch (e) {
+            return `Row ${index + 1}: Error - ${e.message}`;
+          }
+        });
+        document.getElementById("csvResult").innerText = predictions.join("\n");
+      };
+      reader.readAsText(file);
+    }
   </script>
 </body>
 </html>
