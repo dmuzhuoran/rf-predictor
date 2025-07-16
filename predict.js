@@ -41,11 +41,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     function predictSingle(inputData) {
         if (!model || !scaler || !imputer) throw new Error("模型未加载");
 
-        const imputed = feature_names.map((name) => {
-            const value = inputData[name];
-            const mean = imputer[name];
-            return imputeMissing(value, mean);
-        });
+        const imputed = feature_names.map(name =>
+            imputeMissing(inputData[name], imputer[name])
+        );
 
         const standardized = imputed.map((val, i) =>
             standardize(val, scaler.mean[feature_names[i]], scaler.scale[feature_names[i]])
@@ -65,7 +63,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         return Object.entries(class_votes).sort((a, b) => b[1] - a[1])[0][0];
     }
 
-    // 单条预测
     document.querySelector("form").addEventListener("submit", function (e) {
         e.preventDefault();
         const inputData = {};
@@ -82,7 +79,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
     });
 
-    // 批量预测
     document.getElementById("uploadBtn").addEventListener("click", function () {
         const file = document.getElementById("csvFile").files[0];
         if (!file) return;
@@ -91,13 +87,12 @@ document.addEventListener("DOMContentLoaded", async function () {
         reader.onload = function (e) {
             const lines = e.target.result.trim().split("\n");
             const headers = lines[0].split(",").map(h => h.trim());
-
             const output = [];
 
             for (let i = 1; i < lines.length; i++) {
                 const row = lines[i].split(",");
-                if (row.length !== headers.length) {
-                    output.push(`Row ${i}: Error - 列数不一致`);
+                if (row.length < headers.length) {
+                    output.push(`Row ${i}: Error - 数据列数不足`);
                     continue;
                 }
 
