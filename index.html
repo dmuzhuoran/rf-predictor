@@ -2,24 +2,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Cluster Prediction</title>
+  <meta charset="UTF-8">
+  <title>Cluster Prediction</title>
+  <style>
+    body { font-family: Arial; padding: 20px; max-width: 800px; margin: auto; }
+    h1 { color: #333; }
+    label { display: block; margin: 10px 5px; }
+    input { width: 100%; padding: 6px; margin-top: 2px; }
+    button { margin-top: 15px; padding: 10px 20px; font-size: 16px; }
+    #result, #batchResult { margin-top: 20px; font-weight: bold; font-size: 18px; color: green; }
+  </style>
 </head>
 <body>
-    <h2>Cluster Prediction</h2>
-    <form id="predict-form">
-        <div id="inputs">
-            <!-- 动态输入框将在 JS 中生成 -->
-        </div>
-        <button type="submit">Predict</button>
-    </form>
-    <p id="result"></p>
+  <h1>Cluster Prediction</h1>
 
-    <h3>Batch Prediction (Upload CSV)</h3>
-    <input type="file" id="csvFile" accept=".csv">
-    <button id="uploadBtn">Upload & Predict</button>
-    <div id="batchResult"></div>
+  <form id="predictForm">
+    <div id="inputs"></div>
+    <button type="submit">Predict</button>
+  </form>
 
-    <script src="predict.js"></script>
+  <div id="result"></div>
+
+  <hr>
+  <h2>Batch Prediction (Upload CSV)</h2>
+  <input type="file" id="csvFile" accept=".csv">
+  <button id="uploadBtn">Upload & Predict</button>
+  <div id="batchResult"></div>
+
+  <script src="predict.js"></script>
 </body>
 </html>
