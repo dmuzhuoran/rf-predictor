@@ -113,32 +113,44 @@
     });
 
     document.getElementById("uploadBtn").addEventListener("click", function () {
-      const file = document.getElementById("csvFile").files[0];
-      if (!file) return alert("Please select a CSV file.");
+  const file = document.getElementById("csvFile").files[0];
+  if (!file) return alert("Please select a CSV file.");
 
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        const lines = e.target.result.trim().split("\n");
-        const headers = lines[0].split(",");
-        let results = "";
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const lines = e.target.result.trim().split(/\r?\n/);
+    const headers = lines[0].split(",").map(h => h.trim());
+    let results = "";
 
-        for (let i = 1; i < lines.length; i++) {
-          const row = lines[i].split(",");
-          const inputData = {};
-          headers.forEach((name, j) => {
-            const val = row[j];
-            inputData[name] = val === "" ? null : parseFloat(val);
-          });
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue; // 跳过空行
 
-          try {
-            const prediction = predictSingle(inputData);
-            results += `Row ${i}: Cluster ${prediction}\n`;
-          } catch (err) {
-            results += `Row ${i}: Error - ${err.message}\n`;
-          }
-        }
-        document.getElementById("batch-result").innerText = results;
-      };
+      const row = lines[i].split(",");
+      if (row.length < headers.length) {
+        results += `Row ${i}: ⚠️ 列数不足，跳过\n`;
+        continue;
+      }
+
+      const inputData = {};
+      headers.forEach((name, j) => {
+        const val = row[j];
+        inputData[name] = val === "" ? null : parseFloat(val);
+      });
+
+      try {
+        const prediction = predictSingle(inputData);
+        results += `Row ${i}: ✅ Cluster ${prediction}\n`;
+      } catch (err) {
+        results += `Row ${i}: ❌ Error - ${err.message}\n`;
+      }
+    }
+
+    document.getElementById("batch-result").innerHTML = `<pre>${results}</pre>`;
+  };
+
+  reader.readAsText(file);
+});
+
       reader.readAsText(file);
     });
   </script>
