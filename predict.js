@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         imputer = await fetch("imputer.json").then(res => res.json());
 
         if (!scaler.mean || !scaler.scale) throw new Error("scaler 格式错误");
-        feature_names = Object.keys(scaler.mean);
+        feature_names = Object.keys(scaler.mean)
 
         const inputDiv = document.getElementById("inputs");
         feature_names.forEach(name => {
@@ -39,29 +39,29 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     function predictSingle(inputData) {
-        if (!model || !scaler || !imputer) throw new Error("模型未加载");
+    if (!model || !scaler || !imputer) throw new Error("模型未加载");
 
-        const imputed = feature_names.map((name, i) =>
-            imputeMissing(inputData[name], imputer.means[i])
-        );
+    const imputed = feature_names.map(name =>
+        imputeMissing(inputData[name], imputer[name])
+    );
 
-        const standardized = imputed.map((val, i) =>
-            standardize(val, scaler.mean[feature_names[i]], scaler.scale[feature_names[i]])
-        );
+    const standardized = imputed.map((val, i) =>
+        standardize(val, scaler.mean[feature_names[i]], scaler.scale[feature_names[i]])
+    );
 
-        const class_votes = {};
-        for (let tree of model.trees) {
-            let node = tree;
-            while (!node.is_leaf) {
-                const val = standardized[node.feature];
-                node = val <= node.threshold ? node.left : node.right;
-            }
-            const pred = node.prediction;
-            class_votes[pred] = (class_votes[pred] || 0) + 1;
+    const class_votes = {};
+    for (let tree of model.trees) {
+        let node = tree;
+        while (!node.is_leaf) {
+            const val = standardized[node.feature];
+            node = val <= node.threshold ? node.left : node.right;
         }
-
-        return Object.entries(class_votes).sort((a, b) => b[1] - a[1])[0][0];
+        const pred = node.prediction;
+        class_votes[pred] = (class_votes[pred] || 0) + 1;
     }
+
+    return Object.entries(class_votes).sort((a, b) => b[1] - a[1])[0][0];
+}
 
     document.querySelector("form").addEventListener("submit", function (e) {
         e.preventDefault();
