@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         return std === 0 ? 0 : (value - mean) / std;
     }
 
-    function predictSingle(inputData) {
+   function predictSingle(inputData) {
     if (!model || !scaler || !imputer) throw new Error("模型未加载");
 
     const imputed = feature_names.map(name =>
@@ -62,6 +62,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     return Object.entries(class_votes).sort((a, b) => b[1] - a[1])[0][0];
 }
+
 
     document.querySelector("form").addEventListener("submit", function (e) {
         e.preventDefault();
