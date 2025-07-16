@@ -9,7 +9,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         model = await fetch("model.json").then(res => res.json());
         scaler = await fetch("scaler.json").then(res => res.json());
         imputer = await fetch("imputer.json").then(res => res.json());
-        feature_names = Object.keys(scaler.mean);  // ✅ 修复方式
+
+        if (!scaler.mean || !scaler.scale) throw new Error("scaler 格式错误");
+        feature_names = Object.keys(scaler.mean);
 
         const inputDiv = document.getElementById("inputs");
         feature_names.forEach(name => {
@@ -17,29 +19,30 @@ document.addEventListener("DOMContentLoaded", async function () {
             label.textContent = name + ": ";
             const input = document.createElement("input");
             input.name = name;
-            input.type = "number";
-            input.step = "any";
-            label.appendChild(input);
+            input.placeholder = name;
             inputDiv.appendChild(label);
+            inputDiv.appendChild(input);
+            inputDiv.appendChild(document.createElement("br"));
         });
-    } catch (err) {
-        alert("❌ 模型或参数加载失败：" + err.message);
-        return;
-    }
 
-    function standardize(value, mean, std) {
-        return std === 0 ? 0 : (value - mean) / std;
+    } catch (err) {
+        alert("❌ 模型或参数加载失败： " + err.message);
+        return;
     }
 
     function imputeMissing(value, mean) {
         return value === "" || value === null || isNaN(value) ? mean : parseFloat(value);
     }
 
+    function standardize(value, mean, std) {
+        return std === 0 ? 0 : (value - mean) / std;
+    }
+
     function predictSingle(inputData) {
         if (!model || !scaler || !imputer) throw new Error("模型未加载");
 
         const imputed = feature_names.map((name, i) =>
-            imputeMissing(inputData[name], imputer[name])
+            imputeMissing(inputData[name], imputer.means[i])
         );
 
         const standardized = imputed.map((val, i) =>
@@ -65,7 +68,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const inputData = {};
         const inputs = document.querySelectorAll("form input");
         inputs.forEach(input => {
-            inputData[input.name] = parseFloat(input.value);
+            inputData[input.name] = input.value.trim();
         });
 
         try {
@@ -77,23 +80,21 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
 
     document.getElementById("uploadBtn").addEventListener("click", function () {
-        const fileInput = document.getElementById("csvFile");
-        const file = fileInput.files[0];
+        const file = document.getElementById("csvFile").files[0];
         if (!file) return;
 
         const reader = new FileReader();
         reader.onload = function (e) {
-            const text = e.target.result;
-            const rows = text.trim().split("\n");
-            const headers = rows[0].split(",");
+            const lines = e.target.result.trim().split("\n");
+            const headers = lines[0].split(",");
 
             const output = [];
 
-            for (let i = 1; i < rows.length; i++) {
-                const values = rows[i].split(",");
+            for (let i = 1; i < lines.length; i++) {
+                const row = lines[i].split(",");
                 const inputData = {};
                 headers.forEach((h, idx) => {
-                    inputData[h.trim()] = parseFloat(values[idx]);
+                    inputData[h.trim()] = row[idx].trim();
                 });
 
                 try {
