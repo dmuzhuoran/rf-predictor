@@ -91,20 +91,25 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             const output = [];
 
-            for (let i = 1; i < lines.length; i++) {
-                const row = lines[i].split(",");
-                const inputData = {};
-                headers.forEach((h, idx) => {
-                    inputData[h.trim()] = row[idx].trim();
-                });
+           for (let i = 1; i < lines.length; i++) {
+    const row = lines[i].split(",");
+    if (row.length !== headers.length) {
+        output.push(`Row ${i}: Error - 列数不一致`);
+        continue;
+    }
 
-                try {
-                    const pred = predictSingle(inputData);
-                    output.push(`Row ${i}: Cluster ${pred}`);
-                } catch (err) {
-                    output.push(`Row ${i}: Error - ${err.message}`);
-                }
-            }
+    const inputData = {};
+    headers.forEach((h, idx) => {
+        inputData[h.trim()] = row[idx] !== undefined ? row[idx].trim() : "";
+    });
+
+    try {
+        const pred = predictSingle(inputData);
+        output.push(`Row ${i}: Cluster ${pred}`);
+    } catch (err) {
+        output.push(`Row ${i}: Error - ${err.message}`);
+    }
+}
 
             document.getElementById("batchResult").innerHTML = output.map(r => `<div>${r}</div>`).join("");
         };
