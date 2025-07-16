@@ -3,76 +3,73 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Patient Cluster Prediction</title>
+  <title>Cluster Prediction</title>
+  <style>
+    body { font-family: Arial; padding: 20px; max-width: 800px; margin: auto; }
+    h1 { color: #333; }
+    label { display: block; margin: 10px 0; }
+    input { width: 100%; padding: 6px; margin-top: 2px; }
+    button { margin-top: 15px; padding: 10px 20px; font-size: 16px; }
+  </style>
 </head>
 <body>
-  <h2>🔍 Cluster Prediction (Single Patient)</h2>
+  <h1>Cluster Prediction</h1>
   <form id="predictForm">
-    <div id="inputFields"></div>
+    <label>Age: <input type="number" name="Age" required></label>
+<label>Female: <input type="number" name="Female" required></label>
+<label>Fever: <input type="number" name="Fever" required></label>
+<label>Weight.loss: <input type="number" name="Weight.loss" required></label>
+<label>Proximal.pain: <input type="number" name="Proximal.pain" required></label>
+<label>Peripheral.arthritis: <input type="number" name="Peripheral.arthritis" required></label>
+<label>Headache: <input type="number" name="Headache" required></label>
+<label>Jaw.claudication: <input type="number" name="Jaw.claudication" required></label>
+<label>Visual.symptoms: <input type="number" name="Visual.symptoms" required></label>
+<label>ESR: <input type="number" name="ESR" required></label>
+<label>CRP: <input type="number" name="CRP" required></label>
+<label>WBC: <input type="number" name="WBC" required></label>
+<label>Hb: <input type="number" name="Hb" required></label>
+<label>PLT: <input type="number" name="PLT" required></label>
+<label>Neutrophils: <input type="number" name="Neutrophils" required></label>
+<label>Lymphocytes: <input type="number" name="Lymphocytes" required></label>
+<label>Hct: <input type="number" name="Hct" required></label>
+<label>RDW: <input type="number" name="RDW" required></label>
+<label>RF: <input type="number" name="RF" required></label>
+<label>CCP: <input type="number" name="CCP" required></label>
+<label>ANA: <input type="number" name="ANA" required></label>
+<label>ALT: <input type="number" name="ALT" required></label>
+<label>AST: <input type="number" name="AST" required></label>
+<label>GGT: <input type="number" name="GGT" required></label>
+<label>ALP: <input type="number" name="ALP" required></label>
+<label>Albumin: <input type="number" name="Albumin" required></label>
     <button type="submit">Predict</button>
   </form>
-  <p id="singleResult"></p>
-
-  <h2>📁 Batch Prediction (CSV Upload)</h2>
-  <input type="file" id="csvInput">
-  <button onclick="predictCSV()">Upload & Predict</button>
-  <a id="downloadLink" style="display: none;">Download CSV Result</a>
+  <div id="result" style="margin-top:20px;font-weight:bold;"></div>
 
   <script src="predict.js"></script>
   <script>
-    const featureNames = JSON.parse(localStorage.getItem("scaler")).feature_names;
+    const feature_names = ["Age", "Female", "Fever", "Weight.loss", "Proximal.pain", "Peripheral.arthritis", "Headache", "Jaw.claudication", "Visual.symptoms", "ESR", "CRP", "WBC", "Hb", "PLT", "Neutrophils", "Lymphocytes", "Hct", "RDW", "RF", "CCP", "ANA", "ALT", "AST", "GGT", "ALP", "Albumin"];
+    const binary_vars = ["Female", "Fever", "Proximal.pain", "Peripheral.arthritis", "Headache", "Jaw.claudication", "Visual.symptoms", "RF", "CCP", "ANA"];
 
-    // 构建表单字段
-    const container = document.getElementById("inputFields");
-    for (let name of featureNames) {
-      const label = document.createElement("label");
-      label.textContent = name + ": ";
-      const input = document.createElement("input");
-      input.type = "number";
-      input.name = name;
-      label.appendChild(input);
-      container.appendChild(label);
-      container.appendChild(document.createElement("br"));
-    }
-
-    // 单例预测逻辑
-    document.getElementById("predictForm").onsubmit = function (e) {
+    document.getElementById("predictForm").addEventListener("submit", function(e) {
       e.preventDefault();
-      const input = {};
-      const formData = new FormData(e.target);
-      for (let [key, value] of formData.entries()) {
-        input[key] = value;
-      }
-      const pred = predictSingle(input);
-      document.getElementById("singleResult").textContent = "Predicted Cluster: " + pred;
-    };
+      const inputData = {};
+      let valid = true;
 
-    // 批量预测逻辑
-    function predictCSV() {
-      const file = document.getElementById("csvInput").files[0];
-      const reader = new FileReader();
-      reader.onload = function (event) {
-        const lines = event.target.result.split("\n").filter(Boolean);
-        const header = lines[0].split(",");
-        const results = [header.join(",") + ",Predicted_Cluster"];
-
-        for (let i = 1; i < lines.length; i++) {
-          const row = lines[i].split(",");
-          const input = {};
-          header.forEach((key, idx) => input[key] = row[idx]);
-          const pred = predictSingle(input);
-          results.push(lines[i] + "," + pred);
+      feature_names.forEach(name => {
+        const el = document.getElementsByName(name)[0];
+        const val = el.value.trim();
+        if (binary_vars.includes(name) && val !== "" && val !== "0" && val !== "1") {
+          alert(name + " should be 0 or 1.");
+          valid = false;
+          return;
         }
+        inputData[name] = val === "" ? null : parseFloat(val);
+      });
 
-        const blob = new Blob([results.join("\n")], { type: "text/csv" });
-        const link = document.getElementById("downloadLink");
-        link.href = URL.createObjectURL(blob);
-        link.download = "prediction_result.csv";
-        link.style.display = "inline";
-        link.textContent = "Download Prediction CSV";
-      };
-      reader.readAsText(file);
-    }
+      if (!valid) return;
+      const pred = predictSingle(inputData);
+      document.getElementById("result").innerText = "Predicted Cluster: " + pred;
+    });
   </script>
 </body>
 </html>
