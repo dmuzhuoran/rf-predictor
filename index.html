@@ -45,76 +45,102 @@
     <button type="submit">Predict</button>
   </form>
 
-  <hr>
-  <h2>Batch Prediction (CSV)</h2>
-  <input type="file" id="csvFile" accept=".csv">
-  <button onclick="handleCSVUpload()">Upload & Predict</button>
-  <div id="csvResult"></div>
-
   <div id="result"></div>
 
-  <script src="predict.js"></script>
+  <hr>
+  <h2>Batch Prediction (Upload CSV)</h2>
+  <input type="file" id="csvFile" accept=".csv">
+  <button id="uploadBtn">Upload & Predict</button>
+  <div id="batch-result"></div>
+
+  <!-- 预测逻辑 -->
   <script>
+    const model = JSON.parse(localStorage.getItem("rf_model"));
+    const scaler = JSON.parse(localStorage.getItem("scaler"));
+    const imputer = JSON.parse(localStorage.getItem("imputer"));
+    const feature_names = scaler.feature_names;
     const binary_vars = ["Female", "Fever", "Proximal.pain", "Peripheral.arthritis", "Headache", "Jaw.claudication", "Visual.symptoms", "RF", "CCP", "ANA"];
-    const feature_names = ["Age", "Female", "Fever", "Weight.loss", "Proximal.pain", "Peripheral.arthritis", "Headache", "Jaw.claudication", "Visual.symptoms", "ESR", "CRP", "WBC", "Hb", "PLT", "Neutrophils", "Lymphocytes", "Hct", "RDW", "RF", "CCP", "ANA", "ALT", "AST", "GGT", "ALP", "Albumin"];
 
-    document.addEventListener("DOMContentLoaded", () => {
-      document.getElementById("predictForm").addEventListener("submit", function (e) {
-        e.preventDefault();
-        const inputData = {};
-        let valid = true;
+    function standardize(value, mean, std) {
+      return std === 0 ? 0 : (value - mean) / std;
+    }
 
-        feature_names.forEach(name => {
-          const el = document.getElementsByName(name)[0];
-          const val = el.value.trim();
-          if (binary_vars.includes(name) && val !== "0" && val !== "1") {
-            alert(name + " must be 0 or 1.");
-            valid = false;
-            return;
-          }
-          inputData[name] = val === "" ? null : parseFloat(val);
-        });
+    function imputeMissing(value, mean) {
+      return value === "" || value === null || isNaN(value) ? mean : parseFloat(value);
+    }
 
-        if (!valid) return;
-
-        try {
-          const prediction = predictSingle(inputData);
-          document.getElementById("result").innerText = "Predicted Cluster: Cluster " + (parseInt(prediction) + 1);
-        } catch (err) {
-          document.getElementById("result").innerText = "❌ Prediction failed: " + err.message;
+    function predictSingle(inputData) {
+      let imputed = feature_names.map((name, i) =>
+        imputeMissing(inputData[name], imputer.means[i])
+      );
+      let standardized = imputed.map((val, i) =>
+        standardize(val, scaler.means[i], scaler.stds[i])
+      );
+      const class_votes = {};
+      for (let tree of model.trees) {
+        let node = tree;
+        while (!node.is_leaf) {
+          let val = standardized[node.feature];
+          node = val <= node.threshold ? node.left : node.right;
         }
+        const pred = node.prediction;
+        class_votes[pred] = (class_votes[pred] || 0) + 1;
+      }
+      return Object.entries(class_votes).sort((a, b) => b[1] - a[1])[0][0];
+    }
+
+    document.getElementById("predictForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const inputData = {};
+      let valid = true;
+      const inputs = document.querySelectorAll("#predictForm input");
+      inputs.forEach(input => {
+        const name = input.name;
+        const value = input.value.trim();
+        if (binary_vars.includes(name) && value !== "0" && value !== "1") {
+          alert(name + " must be 0 or 1.");
+          valid = false;
+        }
+        inputData[name] = value === "" ? null : parseFloat(value);
       });
+      if (!valid) return;
+      try {
+        const prediction = predictSingle(inputData);
+        document.getElementById("result").innerText = "Predicted Cluster: Cluster " + prediction;
+      } catch (err) {
+        document.getElementById("result").innerText = "❌ Prediction failed: " + err.message;
+      }
     });
 
-    function handleCSVUpload() {
-      const fileInput = document.getElementById('csvFile');
-      const file = fileInput.files[0];
-      if (!file) return alert("Please upload a CSV file.");
+    document.getElementById("uploadBtn").addEventListener("click", function () {
+      const file = document.getElementById("csvFile").files[0];
+      if (!file) return alert("Please select a CSV file.");
 
       const reader = new FileReader();
       reader.onload = function (e) {
-        const lines = e.target.result.split("\n").filter(l => l.trim() !== "");
-        const header = lines[0].split(',');
-        const rows = lines.slice(1);
+        const lines = e.target.result.trim().split("\n");
+        const headers = lines[0].split(",");
+        let results = "";
 
-        const predictions = rows.map((row, index) => {
-          const values = row.split(',');
-          const data = {};
-          feature_names.forEach((key, i) => {
-            const val = values[i]?.trim();
-            data[key] = val === "" ? null : parseFloat(val);
+        for (let i = 1; i < lines.length; i++) {
+          const row = lines[i].split(",");
+          const inputData = {};
+          headers.forEach((name, j) => {
+            const val = row[j];
+            inputData[name] = val === "" ? null : parseFloat(val);
           });
+
           try {
-            const pred = predictSingle(data);
-            return `Row ${index + 1}: Cluster ${parseInt(pred) + 1}`;
-          } catch (e) {
-            return `Row ${index + 1}: Error - ${e.message}`;
+            const prediction = predictSingle(inputData);
+            results += `Row ${i}: Cluster ${prediction}\n`;
+          } catch (err) {
+            results += `Row ${i}: Error - ${err.message}\n`;
           }
-        });
-        document.getElementById("csvResult").innerText = predictions.join("\n");
+        }
+        document.getElementById("batch-result").innerText = results;
       };
       reader.readAsText(file);
-    }
+    });
   </script>
 </body>
 </html>
