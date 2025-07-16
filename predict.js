@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         model = await fetch("model.json").then(res => res.json());
         scaler = await fetch("scaler.json").then(res => res.json());
         imputer = await fetch("imputer.json").then(res => res.json());
-        feature_names = scaler.feature_names;
+        feature_names = Object.keys(scaler.mean);  // ✅ 修复方式
 
         const inputDiv = document.getElementById("inputs");
         feature_names.forEach(name => {
@@ -17,9 +17,10 @@ document.addEventListener("DOMContentLoaded", async function () {
             label.textContent = name + ": ";
             const input = document.createElement("input");
             input.name = name;
+            input.type = "number";
+            input.step = "any";
+            label.appendChild(input);
             inputDiv.appendChild(label);
-            inputDiv.appendChild(input);
-            inputDiv.appendChild(document.createElement("br"));
         });
     } catch (err) {
         alert("❌ 模型或参数加载失败：" + err.message);
@@ -38,11 +39,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (!model || !scaler || !imputer) throw new Error("模型未加载");
 
         const imputed = feature_names.map((name, i) =>
-            imputeMissing(inputData[name], imputer.means[i])
+            imputeMissing(inputData[name], imputer[name])
         );
 
         const standardized = imputed.map((val, i) =>
-            standardize(val, scaler.means[i], scaler.stds[i])
+            standardize(val, scaler.mean[feature_names[i]], scaler.scale[feature_names[i]])
         );
 
         const class_votes = {};
@@ -108,3 +109,4 @@ document.addEventListener("DOMContentLoaded", async function () {
         reader.readAsText(file);
     });
 });
+
