@@ -34,3 +34,25 @@ function predictSingle(inputData) {
 
     return Object.entries(class_votes).sort((a, b) => b[1] - a[1])[0][0];
 }
+
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.querySelector("form");
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const inputData = {};
+        const inputs = form.querySelectorAll("input, select");
+        inputs.forEach(input => {
+            const name = input.name;
+            const value = input.value.trim();
+            inputData[name] = value;
+        });
+
+        try {
+            const prediction = predictSingle(inputData);
+            document.getElementById("result").innerText = "Predicted Cluster: Cluster " + prediction;
+        } catch (error) {
+            document.getElementById("result").innerText = "❌ Prediction failed: " + error.message;
+        }
+    });
+});
