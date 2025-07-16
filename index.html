@@ -1,0 +1,78 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Patient Cluster Prediction</title>
+</head>
+<body>
+  <h2>🔍 Cluster Prediction (Single Patient)</h2>
+  <form id="predictForm">
+    <div id="inputFields"></div>
+    <button type="submit">Predict</button>
+  </form>
+  <p id="singleResult"></p>
+
+  <h2>📁 Batch Prediction (CSV Upload)</h2>
+  <input type="file" id="csvInput">
+  <button onclick="predictCSV()">Upload & Predict</button>
+  <a id="downloadLink" style="display: none;">Download CSV Result</a>
+
+  <script src="predict.js"></script>
+  <script>
+    const featureNames = JSON.parse(localStorage.getItem("scaler")).feature_names;
+
+    // 构建表单字段
+    const container = document.getElementById("inputFields");
+    for (let name of featureNames) {
+      const label = document.createElement("label");
+      label.textContent = name + ": ";
+      const input = document.createElement("input");
+      input.type = "number";
+      input.name = name;
+      label.appendChild(input);
+      container.appendChild(label);
+      container.appendChild(document.createElement("br"));
+    }
+
+    // 单例预测逻辑
+    document.getElementById("predictForm").onsubmit = function (e) {
+      e.preventDefault();
+      const input = {};
+      const formData = new FormData(e.target);
+      for (let [key, value] of formData.entries()) {
+        input[key] = value;
+      }
+      const pred = predictSingle(input);
+      document.getElementById("singleResult").textContent = "Predicted Cluster: " + pred;
+    };
+
+    // 批量预测逻辑
+    function predictCSV() {
+      const file = document.getElementById("csvInput").files[0];
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const lines = event.target.result.split("\n").filter(Boolean);
+        const header = lines[0].split(",");
+        const results = [header.join(",") + ",Predicted_Cluster"];
+
+        for (let i = 1; i < lines.length; i++) {
+          const row = lines[i].split(",");
+          const input = {};
+          header.forEach((key, idx) => input[key] = row[idx]);
+          const pred = predictSingle(input);
+          results.push(lines[i] + "," + pred);
+        }
+
+        const blob = new Blob([results.join("\n")], { type: "text/csv" });
+        const link = document.getElementById("downloadLink");
+        link.href = URL.createObjectURL(blob);
+        link.download = "prediction_result.csv";
+        link.style.display = "inline";
+        link.textContent = "Download Prediction CSV";
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
