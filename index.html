@@ -10,38 +10,39 @@
     label { display: block; margin: 10px 0; }
     input { width: 100%; padding: 6px; margin-top: 2px; }
     button { margin-top: 15px; padding: 10px 20px; font-size: 16px; }
-    #result, #batch-result { margin-top: 20px; font-weight: bold; font-size: 18px; color: green; white-space: pre-line; }
+    #result, #batch-result { margin-top: 20px; font-weight: bold; font-size: 18px; color: green; white-space: pre-wrap; }
   </style>
 </head>
 <body>
   <h1>Cluster Prediction</h1>
   <form id="predictForm">
-    <label>Age: <input type="number" name="Age" required></label>
-    <label>Female: <input type="number" name="Female" min="0" max="1" required></label>
-    <label>Fever: <input type="number" name="Fever" min="0" max="1" required></label>
-    <label>Weight.loss: <input type="number" name="Weight.loss" required></label>
-    <label>Proximal.pain: <input type="number" name="Proximal.pain" min="0" max="1" required></label>
-    <label>Peripheral.arthritis: <input type="number" name="Peripheral.arthritis" min="0" max="1" required></label>
-    <label>Headache: <input type="number" name="Headache" min="0" max="1" required></label>
-    <label>Jaw.claudication: <input type="number" name="Jaw.claudication" min="0" max="1" required></label>
-    <label>Visual.symptoms: <input type="number" name="Visual.symptoms" min="0" max="1" required></label>
-    <label>ESR: <input type="number" name="ESR" required></label>
-    <label>CRP: <input type="number" name="CRP" required></label>
-    <label>WBC: <input type="number" name="WBC" required></label>
-    <label>Hb: <input type="number" name="Hb" required></label>
-    <label>PLT: <input type="number" name="PLT" required></label>
-    <label>Neutrophils: <input type="number" name="Neutrophils" required></label>
-    <label>Lymphocytes: <input type="number" name="Lymphocytes" required></label>
-    <label>Hct: <input type="number" name="Hct" required></label>
-    <label>RDW: <input type="number" name="RDW" required></label>
-    <label>RF: <input type="number" name="RF" min="0" max="1" required></label>
-    <label>CCP: <input type="number" name="CCP" min="0" max="1" required></label>
-    <label>ANA: <input type="number" name="ANA" min="0" max="1" required></label>
-    <label>ALT: <input type="number" name="ALT" required></label>
-    <label>AST: <input type="number" name="AST" required></label>
-    <label>GGT: <input type="number" name="GGT" required></label>
-    <label>ALP: <input type="number" name="ALP" required></label>
-    <label>Albumin: <input type="number" name="Albumin" required></label>
+    <!-- 25 个变量 -->
+    <label>Age: <input type="number" name="Age" step="any" required></label>
+    <label>Female: <input type="number" name="Female" min="0" max="1" step="1" required></label>
+    <label>Fever: <input type="number" name="Fever" min="0" max="1" step="1" required></label>
+    <label>Weight.loss: <input type="number" name="Weight.loss" step="any" required></label>
+    <label>Proximal.pain: <input type="number" name="Proximal.pain" min="0" max="1" step="1" required></label>
+    <label>Peripheral.arthritis: <input type="number" name="Peripheral.arthritis" min="0" max="1" step="1" required></label>
+    <label>Headache: <input type="number" name="Headache" min="0" max="1" step="1" required></label>
+    <label>Jaw.claudication: <input type="number" name="Jaw.claudication" min="0" max="1" step="1" required></label>
+    <label>Visual.symptoms: <input type="number" name="Visual.symptoms" min="0" max="1" step="1" required></label>
+    <label>ESR: <input type="number" name="ESR" step="any" required></label>
+    <label>CRP: <input type="number" name="CRP" step="any" required></label>
+    <label>WBC: <input type="number" name="WBC" step="any" required></label>
+    <label>Hb: <input type="number" name="Hb" step="any" required></label>
+    <label>PLT: <input type="number" name="PLT" step="any" required></label>
+    <label>Neutrophils: <input type="number" name="Neutrophils" step="any" required></label>
+    <label>Lymphocytes: <input type="number" name="Lymphocytes" step="any" required></label>
+    <label>Hct: <input type="number" name="Hct" step="any" required></label>
+    <label>RDW: <input type="number" name="RDW" step="any" required></label>
+    <label>RF: <input type="number" name="RF" min="0" max="1" step="1" required></label>
+    <label>CCP: <input type="number" name="CCP" min="0" max="1" step="1" required></label>
+    <label>ANA: <input type="number" name="ANA" min="0" max="1" step="1" required></label>
+    <label>ALT: <input type="number" name="ALT" step="any" required></label>
+    <label>AST: <input type="number" name="AST" step="any" required></label>
+    <label>GGT: <input type="number" name="GGT" step="any" required></label>
+    <label>ALP: <input type="number" name="ALP" step="any" required></label>
+    <label>Albumin: <input type="number" name="Albumin" step="any" required></label>
     <button type="submit">Predict</button>
   </form>
 
@@ -54,12 +55,28 @@
   <div id="batch-result"></div>
 
   <script>
-    const model = JSON.parse(localStorage.getItem("rf_model"));
-    const scaler = JSON.parse(localStorage.getItem("scaler"));
-    const imputer = JSON.parse(localStorage.getItem("imputer"));
-
-    const feature_names = scaler?.feature_names || [];
     const binary_vars = ["Female", "Fever", "Proximal.pain", "Peripheral.arthritis", "Headache", "Jaw.claudication", "Visual.symptoms", "RF", "CCP", "ANA"];
+    let model, scaler, imputer, feature_names;
+
+    async function loadModelFiles() {
+      try {
+        const [m, s, i] = await Promise.all([
+          fetch("model.json").then(r => r.json()),
+          fetch("scaler.json").then(r => r.json()),
+          fetch("imputer.json").then(r => r.json()),
+        ]);
+        model = m;
+        scaler = s;
+        imputer = i;
+        feature_names = scaler.feature_names;
+
+        localStorage.setItem("rf_model", JSON.stringify(model));
+        localStorage.setItem("scaler", JSON.stringify(scaler));
+        localStorage.setItem("imputer", JSON.stringify(imputer));
+      } catch (err) {
+        console.error("❌ 模型文件加载失败：", err);
+      }
+    }
 
     function standardize(value, mean, std) {
       return std === 0 ? 0 : (value - mean) / std;
@@ -70,17 +87,18 @@
     }
 
     function predictSingle(inputData) {
-      let imputed = feature_names.map((name, i) =>
+      const imputed = feature_names.map((name, i) =>
         imputeMissing(inputData[name], imputer.means[i])
       );
-      let standardized = imputed.map((val, i) =>
+      const standardized = imputed.map((val, i) =>
         standardize(val, scaler.means[i], scaler.stds[i])
       );
+
       const class_votes = {};
       for (let tree of model.trees) {
         let node = tree;
         while (!node.is_leaf) {
-          let val = standardized[node.feature];
+          const val = standardized[node.feature];
           node = val <= node.threshold ? node.left : node.right;
         }
         const pred = node.prediction;
@@ -94,7 +112,6 @@
       const inputData = {};
       let valid = true;
       const inputs = document.querySelectorAll("#predictForm input");
-
       inputs.forEach(input => {
         const name = input.name;
         const value = input.value.trim();
@@ -104,7 +121,6 @@
         }
         inputData[name] = value === "" ? null : parseFloat(value);
       });
-
       if (!valid) return;
 
       try {
@@ -112,7 +128,6 @@
         document.getElementById("result").innerText = "Predicted Cluster: Cluster " + prediction;
       } catch (err) {
         document.getElementById("result").innerText = "❌ Prediction failed: " + err.message;
-        console.error(err);
       }
     });
 
@@ -145,6 +160,9 @@
       };
       reader.readAsText(file);
     });
+
+    // 页面加载时执行
+    window.addEventListener("DOMContentLoaded", loadModelFiles);
   </script>
 </body>
 </html>
