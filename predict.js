@@ -33,13 +33,20 @@ function createFormInputs() {
         container.appendChild(document.createElement("br"));
     });
 }
-
 // ========== Predict for Single Sample =============
 function predictSingleSample() {
     let values = feature_names.map(f => {
         let val = parseFloat(document.getElementById(f).value);
         return isNaN(val) ? imputer[feature_names.indexOf(f)] : val;
     });
+
+    // Ensure values are not missing before normalizing
+    let missingCount = values.filter(v => isNaN(v)).length;
+    if (missingCount > 3) { // Limit the number of missing values
+        alert("Too many missing values. You can only have up to 3 missing values.");
+        return;
+    }
+
     let norm = values.map((v, i) => (v - scaler.mean[i]) / scaler.sd[i]);
     let prediction = vote(model.trees, norm);
     document.getElementById("single-prediction").innerText = `Predicted: Cluster ${prediction}`;
@@ -55,11 +62,6 @@ function predictFromCSV() {
             let text = reader.result;
             let rows = text.trim().split("\n").map(r => r.split(","));
             let header = rows[0];
-            // Print headers to debug
-            console.log("CSV Header:", header);
-            console.log("Expected Features:", feature_names);
-
-            // Ensure all required columns are present
             let missingColumns = feature_names.filter(f => !header.includes(f));
             if (missingColumns.length > 0) {
                 alert("Missing columns in CSV: " + missingColumns.join(", "));
@@ -71,6 +73,13 @@ function predictFromCSV() {
                 let val = parseFloat(row[i]);
                 return isNaN(val) ? imputer[j] : val;
             }));
+
+            // Check and limit the number of missing values in the data
+            let missingValuesCount = data.flat().filter(v => isNaN(v)).length;
+            if (missingValuesCount > 3) {
+                alert("Too many missing values. You can only have up to 3 missing values.");
+                return;
+            }
 
             // Standardize the data before prediction
             let scaled = data.map(row => row.map((v, i) => (v - scaler.mean[i]) / scaler.sd[i]));
@@ -89,18 +98,4 @@ function predictFromCSV() {
         }
     };
     reader.readAsText(input.files[0]);
-}
-
-// ========== Tree Voting Function =============
-function vote(trees, sample) {
-    let votes = new Array(model.n_classes).fill(0);
-    for (let tree of trees) {
-        let node = tree[0];
-        while (node.status !== -1) {
-            let feat_idx = feature_names.indexOf(node.split_var);
-            node = sample[feat_idx] <= node.split_point ? tree[node.left - 1] : tree[node.right - 1];
-        }
-        votes[node.prediction - 1]++;
-    }
-    return votes.indexOf(Math.max(...votes)) + 1;
 }
