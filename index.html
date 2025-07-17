@@ -2,22 +2,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Cluster Predictor (CSV)</title>
-  <script src="predict_csv.js"></script>
+  <meta charset="UTF-8" />
+  <title>Cluster Prediction from CSV</title>
+  <script src="predict.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 700px; margin: auto; }
-    input, button { margin-top: 10px; width: 100%; padding: 10px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-    th { background-color: #f2f2f2; }
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    h1 { font-size: 24px; }
+    table { border-collapse: collapse; margin-top: 20px; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background-color: #f8f8f8; }
+    button { padding: 10px 20px; }
+    .note { font-size: 12px; color: gray; margin-top: -10px; }
   </style>
 </head>
 <body>
-  <h2>Cluster Prediction from CSV</h2>
-  <p>Select a CSV file with the following headers:<br><code>Age,Female,Fever,...,Albumin</code></p>
-  <input type="file" id="csvFile" accept=".csv">
-  <button onclick="predictCSV()">Predict from CSV</button>
+  <h1>Cluster Prediction from CSV</h1>
+  <p>Select a CSV file with the following headers:</p>
+  <p class="note">Age, Female, Fever, ..., Albumin</p>
+  <input type="file" id="csvFileInput" />
+  <br /><br />
+  <button onclick="handleCSV()">Predict from CSV</button>
   <div id="output"></div>
 </body>
 </html>
