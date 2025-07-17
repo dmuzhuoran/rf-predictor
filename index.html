@@ -1,27 +1,42 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Cluster Prediction from CSV</title>
+  <title>Cluster Prediction</title>
   <script src="predict.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 40px; }
-    h1 { font-size: 24px; }
-    table { border-collapse: collapse; margin-top: 20px; width: 100%; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background-color: #f8f8f8; }
-    button { padding: 10px 20px; }
-    .note { font-size: 12px; color: gray; margin-top: -10px; }
-  </style>
 </head>
 <body>
-  <h1>Cluster Prediction from CSV</h1>
-  <p>Select a CSV file with the following headers:</p>
-  <p class="note">Age, Female, Fever, ..., Albumin</p>
-  <input type="file" id="csvFileInput" />
-  <br /><br />
-  <button onclick="handleCSV()">Predict from CSV</button>
-  <div id="output"></div>
+  <h2>Enter Patient Data</h2>
+  <form onsubmit="event.preventDefault(); predictFromForm();">
+    <div id="inputs"></div>
+    <button type="submit">Predict Cluster</button>
+  </form>
+  <div id="output" style="margin-top: 20px; font-family: monospace;"></div>
+  <script>
+    const numeric_features = [
+      "Age", "ESR", "CRP", "WBC", "Hb", "PLT", "Neutrophils", "Lymphocytes",
+      "Hct", "RDW", "ALT", "AST", "GGT", "ALP", "Albumin"
+    ];
+    const binary_features = [
+      "Female", "Fever", "Weight.loss", "Proximal.pain", "Peripheral.arthritis",
+      "Headache", "Jaw.claudication", "Visual.symptoms", "RF", "CCP", "ANA"
+    ];
+    const features = numeric_features.concat(binary_features);
+
+    const inputDiv = document.getElementById("inputs");
+    features.forEach(f => {
+      const label = document.createElement("label");
+      label.textContent = f + ": ";
+      const input = document.createElement("input");
+      input.type = "number";
+      input.step = numeric_features.includes(f) ? "any" : "1";
+      input.min = binary_features.includes(f) ? "0" : undefined;
+      input.max = binary_features.includes(f) ? "1" : undefined;
+      input.id = f;
+      label.appendChild(input);
+      inputDiv.appendChild(label);
+      inputDiv.appendChild(document.createElement("br"));
+    });
+  </script>
 </body>
 </html>
