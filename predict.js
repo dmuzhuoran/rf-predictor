@@ -123,12 +123,12 @@ function predictFromCSV() {
 
 // ========== Tree Voting Function =============
 function vote(trees, sample) {
+    console.log("🔎 Standardized sample:", sample);  // ✅ 打印标准化输入
     let votes = new Array(model.n_classes).fill(0);
 
     for (let tree of trees) {
-        let node = tree; // 每棵树的根节点
+        let node = tree;
 
-        // 遍历树，直到到达叶节点（有 value 属性）
         while (!node.value) {
             let feat_idx = feature_names.indexOf(node.feature);
             if (feat_idx === -1) {
@@ -148,15 +148,16 @@ function vote(trees, sample) {
             }
         }
 
-        // 到达叶节点，累加 votes
         if (node && node.value) {
+            console.log("🌿 Leaf value:", node.value);  // ✅ 打印叶子节点输出
             for (let i = 0; i < node.value.length; i++) {
                 votes[i] += node.value[i];
             }
         }
     }
 
-    // 返回票数最多的类别（索引+1）
+    console.log("📊 Final votes:", votes);  // ✅ 打印最终票数
     return votes.indexOf(Math.max(...votes)) + 1;
 }
+
 
