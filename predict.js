@@ -35,19 +35,23 @@ function createFormInputs() {
 }
 // ========== Predict for Single Sample =============
 function predictSingleSample() {
+    // 获取用户输入的所有特征值
     let values = feature_names.map(f => {
         let val = parseFloat(document.getElementById(f).value);
-        return isNaN(val) ? imputer[feature_names.indexOf(f)] : val;
+        return isNaN(val) ? imputer[feature_names.indexOf(f)] : val; // 使用插补值填充缺失数据
     });
 
-    // Ensure values are not missing before normalizing
+    // 检查是否超过最大缺失值容忍度（例如：最多允许 3 个缺失值）
     let missingCount = values.filter(v => isNaN(v)).length;
-    if (missingCount > 3) { // Limit the number of missing values
+    if (missingCount > 3) { // 设置最大缺失值容忍度
         alert("Too many missing values. You can only have up to 3 missing values.");
         return;
     }
 
+    // 数据标准化：将输入值按模型的均值和标准差进行标准化
     let norm = values.map((v, i) => (v - scaler.mean[i]) / scaler.sd[i]);
+
+    // 预测：使用模型进行预测
     let prediction = vote(model.trees, norm);
     document.getElementById("single-prediction").innerText = `Predicted: Cluster ${prediction}`;
 }
@@ -61,27 +65,32 @@ function predictFromCSV() {
         try {
             let text = reader.result;
             let rows = text.trim().split("\n").map(r => r.split(","));
-            let header = rows[0];
-            let missingColumns = feature_names.filter(f => !header.includes(f));
+            
+            // 获取并清理表头
+            let header = rows[0];  // 获取第一行作为表头
+            let cleanHeader = header.map(h => h.trim().replace(/\s+/g, '.'));  // 清理空格并统一格式
+
+            console.log("Cleaned CSV Header:", cleanHeader);  // 打印清理后的表头
+            let missingColumns = feature_names.filter(f => !cleanHeader.includes(f));
             if (missingColumns.length > 0) {
                 alert("Missing columns in CSV: " + missingColumns.join(", "));
                 return;
             }
 
-            let colIdx = feature_names.map(f => header.indexOf(f));
+            let colIdx = feature_names.map(f => cleanHeader.indexOf(f));
             let data = rows.slice(1).map(row => colIdx.map((i, j) => {
                 let val = parseFloat(row[i]);
                 return isNaN(val) ? imputer[j] : val;
             }));
 
-            // Check and limit the number of missing values in the data
+            // 检查数据中的缺失值数量
             let missingValuesCount = data.flat().filter(v => isNaN(v)).length;
             if (missingValuesCount > 3) {
                 alert("Too many missing values. You can only have up to 3 missing values.");
                 return;
             }
 
-            // Standardize the data before prediction
+            // 数据标准化
             let scaled = data.map(row => row.map((v, i) => (v - scaler.mean[i]) / scaler.sd[i]));
             let predictions = scaled.map(norm => vote(model.trees, norm));
             let count = {};
