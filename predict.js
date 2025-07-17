@@ -55,11 +55,24 @@ function predictFromCSV() {
             let text = reader.result;
             let rows = text.trim().split("\n").map(r => r.split(","));
             let header = rows[0];
+            // Print headers to debug
+            console.log("CSV Header:", header);
+            console.log("Expected Features:", feature_names);
+
+            // Ensure all required columns are present
+            let missingColumns = feature_names.filter(f => !header.includes(f));
+            if (missingColumns.length > 0) {
+                alert("Missing columns in CSV: " + missingColumns.join(", "));
+                return;
+            }
+
             let colIdx = feature_names.map(f => header.indexOf(f));
             let data = rows.slice(1).map(row => colIdx.map((i, j) => {
                 let val = parseFloat(row[i]);
                 return isNaN(val) ? imputer[j] : val;
             }));
+
+            // Standardize the data before prediction
             let scaled = data.map(row => row.map((v, i) => (v - scaler.mean[i]) / scaler.sd[i]));
             let predictions = scaled.map(norm => vote(model.trees, norm));
             let count = {};
@@ -72,6 +85,7 @@ function predictFromCSV() {
             document.getElementById("csv-prediction").innerText = `Predicted: Cluster ${majority}\n` + result;
         } catch (e) {
             alert("Invalid CSV format or missing headers.");
+            console.error(e);
         }
     };
     reader.readAsText(input.files[0]);
