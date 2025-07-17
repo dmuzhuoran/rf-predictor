@@ -1,49 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Cluster Prediction</title>
-  <script src="predict.js"></script>
+    <meta charset="UTF-8">
+    <title>Cluster Prediction</title>
+    <script src="predict.js"></script>
+    <style>
+        input { margin: 2px; padding: 4px; }
+        label { display: inline-block; width: 150px; }
+        .section { margin-bottom: 30px; }
+        h2 { margin-top: 40px; }
+    </style>
 </head>
 <body>
-  <h2>Single Patient Input</h2>
-  <form onsubmit="event.preventDefault(); predictFromForm();">
-    <div id="inputs"></div>
-    <button type="submit">Predict Cluster</button>
-  </form>
+    <h1>Single Patient Input</h1>
+    <div class="section" id="single-input-form">
+        <form id="single-form">
+            <div id="input-fields"></div>
+            <button type="button" onclick="predictSingleSample()">Predict Cluster</button>
+        </form>
+        <p id="single-prediction"></p>
+    </div>
 
-  <hr/>
+    <hr>
 
-  <h2>Batch CSV Upload</h2>
-  <input type="file" id="csvFile" accept=".csv" />
-  <button onclick="predictFromCSV()">Upload and Predict</button>
-
-  <div id="output" style="margin-top: 20px; font-family: monospace;"></div>
-  <script>
-    const numeric_features = [
-      "Age", "ESR", "CRP", "WBC", "Hb", "PLT", "Neutrophils", "Lymphocytes",
-      "Hct", "RDW", "ALT", "AST", "GGT", "ALP", "Albumin"
-    ];
-    const binary_features = [
-      "Female", "Fever", "Weight.loss", "Proximal.pain", "Peripheral.arthritis",
-      "Headache", "Jaw.claudication", "Visual.symptoms", "RF", "CCP", "ANA"
-    ];
-    const features = numeric_features.concat(binary_features);
-
-    const inputDiv = document.getElementById("inputs");
-    features.forEach(f => {
-      const label = document.createElement("label");
-      label.textContent = f + ": ";
-      const input = document.createElement("input");
-      input.type = "number";
-      input.step = numeric_features.includes(f) ? "any" : "1";
-      input.min = binary_features.includes(f) ? "0" : undefined;
-      input.max = binary_features.includes(f) ? "1" : undefined;
-      input.id = f;
-      label.appendChild(input);
-      inputDiv.appendChild(label);
-      inputDiv.appendChild(document.createElement("br"));
-    });
-  </script>
+    <h1>Batch CSV Upload</h1>
+    <div class="section">
+        <input type="file" id="csvFile" accept=".csv">
+        <button onclick="predictFromCSV()">Upload and Predict</button>
+        <pre id="csv-prediction"></pre>
+    </div>
 </body>
 </html>
