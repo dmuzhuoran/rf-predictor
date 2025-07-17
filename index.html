@@ -6,11 +6,18 @@
   <script src="predict.js"></script>
 </head>
 <body>
-  <h2>Enter Patient Data</h2>
+  <h2>Single Patient Input</h2>
   <form onsubmit="event.preventDefault(); predictFromForm();">
     <div id="inputs"></div>
     <button type="submit">Predict Cluster</button>
   </form>
+
+  <hr/>
+
+  <h2>Batch CSV Upload</h2>
+  <input type="file" id="csvFile" accept=".csv" />
+  <button onclick="predictFromCSV()">Upload and Predict</button>
+
   <div id="output" style="margin-top: 20px; font-family: monospace;"></div>
   <script>
     const numeric_features = [

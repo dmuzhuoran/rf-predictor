@@ -93,3 +93,30 @@ async function predictFromForm() {
   const { votes, probs } = aggregateVotes(model.trees, sample, model.feature_names, model.n_classes);
   displayResults(votes, probs);
 }
+
+
+async function predictFromCSV() {
+  const fileInput = document.getElementById("csvFile");
+  if (!fileInput.files.length) return alert("Please upload a CSV file.");
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+  reader.onload = async function (e) {
+    const csv = e.target.result;
+    const rows = csv.trim().split("\n").map(r => r.split(","));
+    const header = rows[0];
+    const dataRows = rows.slice(1);
+
+    const { model, imputer, scaler } = await loadModelComponents();
+
+    const results = dataRows.map((row, index) => {
+      const input = Object.fromEntries(header.map((h, i) => [h.trim(), row[i].trim()]));
+      const sample = preprocessInput(input, imputer, scaler, model.feature_names);
+      const { votes, probs } = aggregateVotes(model.trees, sample, model.feature_names, model.n_classes);
+      const maxIdx = probs.indexOf(Math.max(...probs));
+      return `Row ${index + 1} → Predicted: Cluster ${maxIdx + 1} | Probs: ${probs.map(p => p.toFixed(2)).join(", ")}`;
+    });
+
+    document.getElementById("output").innerHTML = "<pre>" + results.join("\n") + "</pre>";
+  };
+  reader.readAsText(file);
+}
