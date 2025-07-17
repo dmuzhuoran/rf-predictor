@@ -126,11 +126,17 @@ function vote(trees, sample) {
     let votes = new Array(model.n_classes).fill(0);
     for (let tree of trees) {
         let node = tree[0];
-        while (node.status !== -1) {
-            let feat_idx = feature_names.indexOf(node.split_var);
-            node = sample[feat_idx] <= node.split_point ? tree[node.left - 1] : tree[node.right - 1];
+        while (node.status !== -1) {  // 确保 node 存在并且是叶节点
+            let feat_idx = feature_names.indexOf(node.feature);
+            if (sample[feat_idx] <= node.threshold) {
+                node = node.left;  // 继续左子节点
+            } else {
+                node = node.right;  // 继续右子节点
+            }
         }
+        // 叶节点的预测值
         votes[node.prediction - 1]++;
     }
     return votes.indexOf(Math.max(...votes)) + 1;
 }
+
