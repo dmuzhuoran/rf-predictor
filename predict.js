@@ -3,9 +3,9 @@ let model, imputer, scaler, feature_names;
 
 async function loadJSON() {
     [model, imputer, scaler] = await Promise.all([
-        fetch("model.json").then(r => r.json()),
-        fetch("imputer.json").then(r => r.json()),
-        fetch("scaler.json").then(r => r.json()),
+        fetch("model.json").then(r => r.json()).then(data => { console.log('Model Loaded:', data); return data; }),
+        fetch("imputer.json").then(r => r.json()).then(data => { console.log('Imputer Loaded:', data); return data; }),
+        fetch("scaler.json").then(r => r.json()).then(data => { console.log('Scaler Loaded:', data); return data; }),
     ]);
     feature_names = model.feature_names;
     createFormInputs();
@@ -33,25 +33,37 @@ function createFormInputs() {
         container.appendChild(document.createElement("br"));
     });
 }
+
+// ========== Validate Single Sample Input =============
+function validateInputs() {
+    let values = feature_names.map(f => document.getElementById(f).value);
+    if (values.includes('') || values.some(val => isNaN(val))) {
+        alert("Please fill in all fields with valid numbers.");
+        return false;
+    }
+    return true;
+}
+
 // ========== Predict for Single Sample =============
 function predictSingleSample() {
-    // 获取用户输入的所有特征值
+    if (!validateInputs()) return;  // Ensure valid input before proceeding
+
     let values = feature_names.map(f => {
         let val = parseFloat(document.getElementById(f).value);
-        return isNaN(val) ? imputer[feature_names.indexOf(f)] : val; // 使用插补值填充缺失数据
+        return isNaN(val) ? imputer[feature_names.indexOf(f)] : val; // Use imputer to fill missing values
     });
 
-    // 检查是否超过最大缺失值容忍度（例如：最多允许 3 个缺失值）
+    // Check for missing values tolerance (max 3 missing)
     let missingCount = values.filter(v => isNaN(v)).length;
-    if (missingCount > 3) { // 设置最大缺失值容忍度
+    if (missingCount > 3) { // Max allowed missing values
         alert("Too many missing values. You can only have up to 3 missing values.");
         return;
     }
 
-    // 数据标准化：将输入值按模型的均值和标准差进行标准化
+    // Standardize the input data
     let norm = values.map((v, i) => (v - scaler.mean[i]) / scaler.sd[i]);
 
-    // 预测：使用模型进行预测
+    // Predict using the model
     let prediction = vote(model.trees, norm);
     document.getElementById("single-prediction").innerText = `Predicted: Cluster ${prediction}`;
 }
@@ -65,12 +77,12 @@ function predictFromCSV() {
         try {
             let text = reader.result;
             let rows = text.trim().split("\n").map(r => r.split(","));
-            
-            // 获取并清理表头
-            let header = rows[0];  // 获取第一行作为表头
-            let cleanHeader = header.map(h => h.trim().replace(/\s+/g, '.'));  // 清理空格并统一格式
+            let header = rows[0];
 
-            console.log("Cleaned CSV Header:", cleanHeader);  // 打印清理后的表头
+            // Clean up header (remove extra spaces and format)
+            let cleanHeader = header.map(h => h.trim().replace(/\s+/g, '.'));
+            console.log("Cleaned CSV Header:", cleanHeader);
+
             let missingColumns = feature_names.filter(f => !cleanHeader.includes(f));
             if (missingColumns.length > 0) {
                 alert("Missing columns in CSV: " + missingColumns.join(", "));
@@ -80,17 +92,17 @@ function predictFromCSV() {
             let colIdx = feature_names.map(f => cleanHeader.indexOf(f));
             let data = rows.slice(1).map(row => colIdx.map((i, j) => {
                 let val = parseFloat(row[i]);
-                return isNaN(val) ? imputer[j] : val;
+                return isNaN(val) ? imputer[j] : val;  // Use imputer to fill missing values
             }));
 
-            // 检查数据中的缺失值数量
+            // Check for missing values tolerance (max 3 missing)
             let missingValuesCount = data.flat().filter(v => isNaN(v)).length;
             if (missingValuesCount > 3) {
                 alert("Too many missing values. You can only have up to 3 missing values.");
                 return;
             }
 
-            // 数据标准化
+            // Standardize the data
             let scaled = data.map(row => row.map((v, i) => (v - scaler.mean[i]) / scaler.sd[i]));
             let predictions = scaled.map(norm => vote(model.trees, norm));
             let count = {};
@@ -107,4 +119,18 @@ function predictFromCSV() {
         }
     };
     reader.readAsText(input.files[0]);
+}
+
+// ========== Tree Voting Function =============
+function vote(trees, sample) {
+    let votes = new Array(model.n_classes).fill(0);
+    for (let tree of trees) {
+        let node = tree[0];
+        while (node.status !== -1) {
+            let feat_idx = feature_names.indexOf(node.split_var);
+            node = sample[feat_idx] <= node.split_point ? tree[node.left - 1] : tree[node.right - 1];
+        }
+        votes[node.prediction - 1]++;
+    }
+    return votes.indexOf(Math.max(...votes)) + 1;
 }
