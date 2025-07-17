@@ -126,17 +126,34 @@ function vote(trees, sample) {
     let votes = new Array(model.n_classes).fill(0);
     for (let tree of trees) {
         let node = tree[0];
-        while (node.status !== -1) {  // 确保 node 存在并且是叶节点
+        
+        // 遍历树的节点，确保节点存在
+        while (node && node.status !== -1) {
             let feat_idx = feature_names.indexOf(node.feature);
+            // 确保采样数据有效
             if (sample[feat_idx] <= node.threshold) {
                 node = node.left;  // 继续左子节点
             } else {
                 node = node.right;  // 继续右子节点
             }
+
+            // 确保节点存在
+            if (!node) {
+                console.error("Error: Node is undefined");
+                break;
+            }
         }
-        // 叶节点的预测值
-        votes[node.prediction - 1]++;
+        
+        // 如果节点有效，则计算投票
+        if (node) {
+            votes[node.prediction - 1]++;
+        } else {
+            console.error('Error: Invalid node in the tree');
+        }
     }
+    
+    // 返回票数最多的分类
     return votes.indexOf(Math.max(...votes)) + 1;
 }
+
 
