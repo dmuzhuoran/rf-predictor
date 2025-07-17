@@ -124,36 +124,39 @@ function predictFromCSV() {
 // ========== Tree Voting Function =============
 function vote(trees, sample) {
     let votes = new Array(model.n_classes).fill(0);
+
     for (let tree of trees) {
-        let node = tree[0];
-        
-        // 遍历树的节点，确保节点存在
-        while (node && node.status !== -1) {
+        let node = tree; // 每棵树的根节点
+
+        // 遍历树，直到到达叶节点（有 value 属性）
+        while (!node.value) {
             let feat_idx = feature_names.indexOf(node.feature);
-            // 确保采样数据有效
-            if (sample[feat_idx] <= node.threshold) {
-                node = node.left;  // 继续左子节点
-            } else {
-                node = node.right;  // 继续右子节点
+            if (feat_idx === -1) {
+                console.error("Feature not found:", node.feature);
+                break;
             }
 
-            // 确保节点存在
+            if (sample[feat_idx] <= node.threshold) {
+                node = node.left;
+            } else {
+                node = node.right;
+            }
+
             if (!node) {
-                console.error("Error: Node is undefined");
+                console.error("Error: Invalid node in the tree");
                 break;
             }
         }
-        
-        // 如果节点有效，则计算投票
-        if (node) {
-            votes[node.prediction - 1]++;
-        } else {
-            console.error('Error: Invalid node in the tree');
+
+        // 到达叶节点，累加 votes
+        if (node && node.value) {
+            for (let i = 0; i < node.value.length; i++) {
+                votes[i] += node.value[i];
+            }
         }
     }
-    
-    // 返回票数最多的分类
+
+    // 返回票数最多的类别（索引+1）
     return votes.indexOf(Math.max(...votes)) + 1;
 }
-
 
