@@ -1,122 +1,92 @@
-async function loadModelComponents() {
-  const [modelRes, imputerRes, scalerRes] = await Promise.all([
-    fetch("model.json"),
-    fetch("imputer.json"),
-    fetch("scaler.json"),
-  ]);
-  return {
-    model: await modelRes.json(),
-    imputer: await imputerRes.json(),
-    scaler: await scalerRes.json(),
-  };
+// ========== Load model, imputer, scaler =============
+let model, imputer, scaler, feature_names;
+
+async function loadJSON() {
+    [model, imputer, scaler] = await Promise.all([
+        fetch("model.json").then(r => r.json()),
+        fetch("imputer.json").then(r => r.json()),
+        fetch("scaler.json").then(r => r.json()),
+    ]);
+    feature_names = model.feature_names;
+    createFormInputs();
 }
 
-function preprocessInput(input, imputer, scaler, features) {
-  return features.map((key) => {
-    let val = parseFloat(input[key]);
-    if (isNaN(val)) val = imputer[key];
-    return (val - scaler.mean[key]) / scaler.sd[key];
-  });
-}
+window.onload = loadJSON;
 
-function predictSingleTree(tree, sample, featureIndexMap) {
-  if (!tree.left && !tree.right && tree.prediction !== undefined) {
-    const result = [0, 0, 0];
-    result[tree.prediction - 1] = 1;
-    return result;
-  }
-  const idx = featureIndexMap[tree.split_var];
-  const val = sample[idx];
-  if (val <= tree.split_point) {
-    return predictSingleTree(tree.left_node, sample, featureIndexMap);
-  } else {
-    return predictSingleTree(tree.right_node, sample, featureIndexMap);
-  }
-}
-
-function convertTree(treeNodes) {
-  const nodes = {};
-  treeNodes.forEach(node => {
-    nodes[node.node] = {
-      split_var: node.split_var,
-      split_point: node.split_point,
-      prediction: node.status === -1 ? node.prediction : undefined,
-      left_node: node.status === 1 ? node.left : undefined,
-      right_node: node.status === 1 ? node.right : undefined
-    };
-  });
-
-  function buildTree(index) {
-    const node = nodes[index];
-    if (!node) return null;
-    return {
-      split_var: node.split_var,
-      split_point: node.split_point,
-      prediction: node.prediction,
-      left_node: node.left_node ? buildTree(node.left_node) : null,
-      right_node: node.right_node ? buildTree(node.right_node) : null
-    };
-  }
-  return buildTree(1);
-}
-
-function aggregateVotes(trees_raw, sample, featureNames, n_classes) {
-  const trees = trees_raw.map(convertTree);
-  const featureIndexMap = Object.fromEntries(featureNames.map((f, i) => [f, i]));
-  const votes = Array(n_classes).fill(0);
-  trees.forEach((tree) => {
-    const pred = predictSingleTree(tree, sample, featureIndexMap);
-    pred.forEach((v, i) => votes[i] += v);
-  });
-  const total = votes.reduce((a, b) => a + b, 0);
-  const probs = votes.map(v => v / total);
-  return { votes, probs };
-}
-
-function displayResults(votes, probs) {
-  const classes = ["Cluster 1", "Cluster 2", "Cluster 3"];
-  const lines = classes.map((label, i) =>
-    `${label}: ${votes[i]} votes (${(probs[i] * 100).toFixed(1)}%)`);
-  const maxIdx = probs.indexOf(Math.max(...probs));
-  document.getElementById("output").innerHTML = `
-    <h3>Predicted: <b>${classes[maxIdx]}</b></h3>
-    <pre>${lines.join("\n")}</pre>
-  `;
-}
-
-async function predictFromForm() {
-  const { model, imputer, scaler } = await loadModelComponents();
-  const input = Object.fromEntries(
-    model.feature_names.map(f => [f, document.getElementById(f).value])
-  );
-  const sample = preprocessInput(input, imputer, scaler, model.feature_names);
-  const { votes, probs } = aggregateVotes(model.trees, sample, model.feature_names, model.n_classes);
-  displayResults(votes, probs);
-}
-
-
-async function predictFromCSV() {
-  const fileInput = document.getElementById("csvFile");
-  if (!fileInput.files.length) return alert("Please upload a CSV file.");
-  const file = fileInput.files[0];
-  const reader = new FileReader();
-  reader.onload = async function (e) {
-    const csv = e.target.result;
-    const rows = csv.trim().split("\n").map(r => r.split(","));
-    const header = rows[0];
-    const dataRows = rows.slice(1);
-
-    const { model, imputer, scaler } = await loadModelComponents();
-
-    const results = dataRows.map((row, index) => {
-      const input = Object.fromEntries(header.map((h, i) => [h.trim(), row[i].trim()]));
-      const sample = preprocessInput(input, imputer, scaler, model.feature_names);
-      const { votes, probs } = aggregateVotes(model.trees, sample, model.feature_names, model.n_classes);
-      const maxIdx = probs.indexOf(Math.max(...probs));
-      return `Row ${index + 1} → Predicted: Cluster ${maxIdx + 1} | Probs: ${probs.map(p => p.toFixed(2)).join(", ")}`;
+// ========== Create Form Fields Dynamically =============
+function createFormInputs() {
+    const container = document.getElementById("input-fields");
+    feature_names.forEach(name => {
+        const label = document.createElement("label");
+        label.textContent = name + ": ";
+        const input = document.createElement("input");
+        input.type = "number";
+        input.id = name;
+        input.step = "any";
+        if (["Female", "Fever", "Weight.loss", "Proximal.pain", "Peripheral.arthritis",
+             "Headache", "Jaw.claudication", "Visual.symptoms", "RF", "CCP", "ANA"].includes(name)) {
+            input.min = 0;
+            input.max = 1;
+        }
+        container.appendChild(label);
+        container.appendChild(input);
+        container.appendChild(document.createElement("br"));
     });
+}
 
-    document.getElementById("output").innerHTML = "<pre>" + results.join("\n") + "</pre>";
-  };
-  reader.readAsText(file);
+// ========== Predict for Single Sample =============
+function predictSingleSample() {
+    let values = feature_names.map(f => {
+        let val = parseFloat(document.getElementById(f).value);
+        return isNaN(val) ? imputer[feature_names.indexOf(f)] : val;
+    });
+    let norm = values.map((v, i) => (v - scaler.mean[i]) / scaler.sd[i]);
+    let prediction = vote(model.trees, norm);
+    document.getElementById("single-prediction").innerText = `Predicted: Cluster ${prediction}`;
+}
+
+// ========== Predict for CSV Upload =============
+function predictFromCSV() {
+    const input = document.getElementById("csvFile");
+    if (!input.files.length) return alert("Please upload a CSV file");
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            let text = reader.result;
+            let rows = text.trim().split("\n").map(r => r.split(","));
+            let header = rows[0];
+            let colIdx = feature_names.map(f => header.indexOf(f));
+            let data = rows.slice(1).map(row => colIdx.map((i, j) => {
+                let val = parseFloat(row[i]);
+                return isNaN(val) ? imputer[j] : val;
+            }));
+            let scaled = data.map(row => row.map((v, i) => (v - scaler.mean[i]) / scaler.sd[i]));
+            let predictions = scaled.map(norm => vote(model.trees, norm));
+            let count = {};
+            predictions.forEach(p => count[p] = (count[p] || 0) + 1);
+            let result = Object.entries(count)
+                .sort((a, b) => b[1] - a[1])
+                .map(([cls, cnt]) => `Cluster ${cls}: ${cnt} votes (${(cnt / predictions.length * 100).toFixed(1)}%)`)
+                .join("\n");
+            let majority = Object.entries(count).sort((a, b) => b[1] - a[1])[0][0];
+            document.getElementById("csv-prediction").innerText = `Predicted: Cluster ${majority}\n` + result;
+        } catch (e) {
+            alert("Invalid CSV format or missing headers.");
+        }
+    };
+    reader.readAsText(input.files[0]);
+}
+
+// ========== Tree Voting Function =============
+function vote(trees, sample) {
+    let votes = new Array(model.n_classes).fill(0);
+    for (let tree of trees) {
+        let node = tree[0];
+        while (node.status !== -1) {
+            let feat_idx = feature_names.indexOf(node.split_var);
+            node = sample[feat_idx] <= node.split_point ? tree[node.left - 1] : tree[node.right - 1];
+        }
+        votes[node.prediction - 1]++;
+    }
+    return votes.indexOf(Math.max(...votes)) + 1;
 }
