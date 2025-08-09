@@ -42,7 +42,18 @@
   <div class="row">
     <div class="card col">
       <h2 style="margin-top:0">模型状态</h2>
-      <div id="loadState" class="hint">正在加载 model.json…</div>
+      <div id="loadState" class="hint">未加载</div>
+      <div class="row" style="margin-top:8px">
+        <div class="col" style="max-width:420px">
+          <label>model.json 路径（留空=同目录）</label>
+          <input id="modelUrl" placeholder="例如：https://yourname.github.io/repo/model.json">
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <button class="muted" id="loadBtn">加载模型</button>
+        <input type="file" id="modelFile" accept="application/json" style="display:none">
+        <button class="muted" id="pickLocalBtn">从本地选择 model.json</button>
+      </div>
 
       <div class="sep"></div>
       <div class="row">
@@ -128,11 +139,123 @@ function rowNormalize(arr){
 }
 
 // 页面加载后自动读取 model.json，并初始化界面
-window.addEventListener('DOMContentLoaded', async () => {
+// 带超时与错误提示的自动加载；支持本地文件回退
+// ===== 模型加载逻辑（支持：URL / 同目录 / 本地文件） =====
+async function loadModel(url, silent=false){
   const tip = document.getElementById('loadState');
+  try{
+    if(!silent) tip.textContent = '正在加载…';
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    MODEL = await res.json();
+    afterModelLoaded();
+    tip.textContent = '已加载';
+  }catch(e){
+    if(!silent) tip.textContent = '加载失败：'+ e.message;
+    throw e;
+  }
+}
+
+function afterModelLoaded(){
+  const meta = MODEL.meta || {};
+  document.getElementById('wInput').value     = meta.fusionWeight ?? 0.7;
+  document.getElementById('alphaInput').value = meta.alphaDist ?? 1.0;
+  document.getElementById('rejInput').value   = meta.rejectThreshold ?? 0.7;
+  renderForm();
+  document.getElementById('predictBtn').disabled = false;
+  document.getElementById('resetBtn').disabled   = false;
+  document.getElementById('batchBtn').disabled   = false;
+  document.getElementById('tplBtn').disabled     = false;
+  const metaDiv = document.getElementById('modelMeta');
+  const cls = ((MODEL.meta && MODEL.meta.classes) || (MODEL.rf && MODEL.rf.classes) || []).join(', ');
+  const hasImpute = !!MODEL.impute; const hasNorm = !!MODEL.normalize;
+  metaDiv.innerHTML = `类别：<b>${cls}</b> ｜ 主成分数：<b>${(MODEL.pca?.pcNames||[]).length}</b> ｜ 树数：<b>${MODEL.rf?.trees?.length||0}</b><br>`+
+                      `预处理：${hasImpute?'插补✓':'插补×'}；${hasNorm?'标准化✓':'标准化×'}；PCA✓`;
+}
+
+// 1) 点击按钮从 URL/同目录加载
+const loadBtn = document.getElementById('loadBtn');
+loadBtn.addEventListener('click', async ()=>{
+  const url = (document.getElementById('modelUrl').value || 'model.json').trim();
+  try{ await loadModel(url); }catch(_){ }
+});
+
+// 2) 从本地选择文件
+const pickBtn = document.getElementById('pickLocalBtn');
+const fileInp = document.getElementById('modelFile');
+pickBtn.addEventListener('click', ()=> fileInp.click());
+fileInp.addEventListener('change', async ()=>{
+  const f = fileInp.files[0]; if(!f) return;
+  const tip = document.getElementById('loadState');
+  try{
+    const text = await f.text(); MODEL = JSON.parse(text); afterModelLoaded(); tip.textContent='已从本地文件加载';
+  }catch(e){ tip.textContent='本地文件解析失败：'+e.message; }
+});
+
+// 3) 页面打开时尝试自动从同目录加载（失败也不会卡住）
+window.addEventListener('DOMContentLoaded', async ()=>{
+  try{ await loadModel('model.json', true); }catch(_){
+    document.getElementById('loadState').textContent = '未加载（请点击“加载模型”或选择本地文件）';
+  }
+});
+  const enableUI = () => {
+    // 参数默认值
+    const meta = MODEL.meta || {};
+    document.getElementById('wInput').value     = meta.fusionWeight ?? 0.7;
+    document.getElementById('alphaInput').value = meta.alphaDist ?? 1.0;
+    document.getElementById('rejInput').value   = meta.rejectThreshold ?? 0.7;
+    // 渲染输入表单 & 启用按钮
+    renderForm();
+    document.getElementById('predictBtn').disabled = false;
+    document.getElementById('resetBtn').disabled   = false;
+    document.getElementById('batchBtn').disabled   = false;
+    document.getElementById('tplBtn').disabled     = false;
+    // 顶部模型信息
+    const metaDiv = document.getElementById('modelMeta');
+    const cls = ((MODEL.meta && MODEL.meta.classes) || (MODEL.rf && MODEL.rf.classes) || []).join(', ');
+    const hasImpute = !!MODEL.impute;
+    const hasNorm   = !!MODEL.normalize;
+    metaDiv.innerHTML = `类别：<b>${cls}</b> ｜ 主成分数：<b>${(MODEL.pca?.pcNames||[]).length}</b> ｜ 树数：<b>${MODEL.rf?.trees?.length||0}</b><br>`+
+                        `预处理：${hasImpute?'插补✓':'插补×'}；${hasNorm?'标准化✓':'标准化×'}；PCA✓`;
+    tip.textContent = '已加载';
+  };
+
+  // 超时 fetch 封装
+  const fetchWithTimeout = (url, opts={}, ms=8000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
+  };
+
   try {
-    tip.textContent = '正在加载 model.json…';
-    const res = await fetch('model.json', { cache: 'no-store' });
+    tip.textContent = '正在从同目录读取 model.json…';
+    // 若是 file:// 打开，某些浏览器会阻止 fetch，本地会报错；我们给出提示并提供本地选择回退
+    const res = await fetchWithTimeout('model.json', {cache:'no-store'});
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    MODEL = await res.json();
+    enableUI();
+  } catch (e) {
+    console.warn('自动加载失败：', e);
+    tip.innerHTML = '自动加载失败。常见原因：未与 <span class="mono">index.html</span> 放同一目录；或以 <span class="mono">file://</span> 打开被浏览器拦截。<br>你可以点击“从本地选择 model.json”手动加载。';
+  }
+
+  // 绑定本地文件选择
+  const pickBtn = document.getElementById('pickLocalBtn');
+  const fileInp = document.getElementById('modelFile');
+  pickBtn.addEventListener('click', () => fileInp.click());
+  fileInp.addEventListener('change', async () => {
+    const f = fileInp.files[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      MODEL = JSON.parse(text);
+      tip.textContent = '已从本地文件加载';
+      enableUI();
+    } catch (err) {
+      tip.textContent = '本地文件解析失败：' + err.message;
+    }
+  });
+});
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     MODEL = await res.json();
 
