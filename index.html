@@ -39,46 +39,47 @@
     <div id="modelMeta" class="hint" style="margin-top:6px"></div>
   </div>
 
-  <div class="row">
-    <div class="card col">
-      <h2>1) 载入模型</h2>
-      <div class="row">
-        <div class="col">
-          <label>model.json URL（留空=同目录）</label>
-          <input id="modelUrl" placeholder="例如：https://yourname.github.io/repo/model.json">
-        </div>
-      </div>
-      <div style="margin-top:8px">
-        <button class="primary" id="loadBtn">加载模型</button>
+  <!-- 顶部信息卡（自动加载模型 + 仅保留 CSV 模板） -->
+<div class="row">
+  <div class="card col">
+    <h2 style="margin-top:0">模型状态</h2>
+    <div id="loadState" class="hint">正在加载 model.json…</div>
+    <div id="modelMeta" class="hint" style="margin-top:6px"></div>
+
+    <div class="sep"></div>
+    <div class="row">
+      <div class="col" style="max-width:220px">
         <button class="muted" id="tplBtn" disabled>下载 CSV 模板</button>
-        <span id="loadState" class="hint" style="margin-left:8px"></span>
-      </div>
-      <div class="sep"></div>
-      <div class="hint">
-        将 <span class="mono">index.html</span> 与 <span class="mono">model.json</span> 放同一目录，开 GitHub Pages 即可。<br>
-        若模型<strong>不含</strong>插补/标准化参数，则输入应为<strong>已插补+已标准化</strong>的数值，列名顺序与 <span class="mono">pca.featureNames</span> 完全一致。
       </div>
     </div>
 
-    <div class="card col">
-      <h2>2) 预测参数（可调）</h2>
-      <div class="row">
-        <div class="col">
-          <label>融合权重 w（模型概率占比）</label>
-          <input id="wInput" type="number" step="0.01" min="0" max="1" value="0.7">
-        </div>
-        <div class="col">
-          <label>距离温度 α</label>
-          <input id="alphaInput" type="number" step="0.1" min="0" value="1.0">
-        </div>
-        <div class="col">
-          <label>拒判阈值</label>
-          <input id="rejInput" type="number" step="0.01" min="0" max="1" value="0.7">
-        </div>
-      </div>
-      <div class="hint" style="margin-top:8px">默认使用模型内置参数，你也可在此临时覆盖。</div>
+    <div class="sep"></div>
+    <div class="hint">
+      将 <span class="mono">index.html</span> 与 <span class="mono">model.json</span> 放同一目录、开启 GitHub Pages 即可。<br>
+      若模型<strong>不含</strong>插补/标准化参数，则 CSV/表单输入必须为<strong>已插补+已标准化</strong>的数值，
+      列名顺序与 <span class="mono">pca.featureNames</span> 完全一致。
     </div>
   </div>
+
+  <div class="card col">
+    <h2 style="margin-top:0">预测参数（可调）</h2>
+    <div class="row">
+      <div class="col">
+        <label>融合权重 w（模型概率占比）</label>
+        <input id="wInput" type="number" step="0.01" min="0" max="1" value="0.7">
+      </div>
+      <div class="col">
+        <label>距离温度 α</label>
+        <input id="alphaInput" type="number" step="0.1" min="0" value="1.0">
+      </div>
+      <div class="col">
+        <label>拒判阈值</label>
+        <input id="rejInput" type="number" step="0.01" min="0" max="1" value="0.7">
+      </div>
+    </div>
+    <div class="hint" style="margin-top:8px">默认使用模型内置参数，你也可在此临时覆盖。</div>
+  </div>
+</div>
 
   <div class="card">
     <h2>3) 输入患者数据（单例）</h2>
@@ -468,36 +469,64 @@ function predictFromRecord(record){
   return out;
 }
 
-document.getElementById('batchBtn').onclick = async ()=>{
-  const f = document.getElementById('csvFile').files[0];
-  const tip = document.getElementById('batchState');
-  if(!MODEL){ alert('请先加载模型'); return; }
-  if(!f){ alert('请选择 CSV 文件'); return; }
+let MODEL = null;
+
+// 页面加载完自动加载 model.json
+window.addEventListener('DOMContentLoaded', async () => {
+  const tip = document.getElementById('loadState');
   try{
-    tip.textContent = '解析中…';
-    const text = await f.text();
-    const {header, rows} = parseCSV(text);
-    if(!rows.length) throw new Error('空文件');
-    tip.textContent = `共 ${rows.length} 条，预测中…`;
+    tip.textContent = '正在加载 model.json…';
+    const res = await fetch('model.json', {cache:'no-store'});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    MODEL = await res.json();
 
-    const results = [];
-    for(let i=0;i<rows.length;i++){
-      const rec = rows[i];
-      const pred = predictFromRecord(rec);
-      results.push({...rec, ...pred});
-      if((i+1)%50===0) tip.textContent = `已完成 ${i+1}/${rows.length}…`;
-    }
-    tip.textContent = `完成 ${rows.length} 条`;
+    // 设置默认参数
+    const meta = MODEL.meta || {};
+    document.getElementById('wInput').value     = meta.fusionWeight ?? 0.7;
+    document.getElementById('alphaInput').value = meta.alphaDist ?? 1.0;
+    document.getElementById('rejInput').value   = meta.rejectThreshold ?? 0.7;
 
-    const csv = toCSV(results);
-    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-    const url = URL.createObjectURL(blob);
-    const a = document.getElementById('dlLink');
-    a.href = url; a.style.display='inline-block';
+    // 渲染输入表单、启用按钮
+    renderForm();
+    document.getElementById('predictBtn').disabled = false;
+    document.getElementById('resetBtn').disabled   = false;
+    document.getElementById('batchBtn').disabled   = false;
+    document.getElementById('tplBtn').disabled     = false;
+
+    // 显示模型信息
+    const cls = (meta.classes || MODEL.rf?.classes || []).join(', ');
+    const hasImpute = !!MODEL.impute;
+    const hasNorm   = !!MODEL.normalize;
+    document.getElementById('modelMeta').innerHTML =
+      `类别：<b>${cls}</b> ｜ 主成分数：<b>${(MODEL.pca?.pcNames||[]).length}</b> ｜ 树数：<b>${MODEL.rf?.trees?.length||0}</b><br>` +
+      `预处理：${hasImpute?'插补✓':'插补×'}；${hasNorm?'标准化✓':'标准化×'}；PCA✓`;
+    tip.textContent = '已加载';
   }catch(e){
-    tip.textContent = '失败：' + e.message;
+    tip.textContent = '加载失败：' + e.message;
     console.error(e);
   }
+});
+
+// 下载 CSV 模板（会根据模型是否含插补/标准化自动选择列名）
+document.getElementById('tplBtn').onclick = () => {
+  if(!MODEL) return;
+  let cols = [];
+  if (MODEL.impute) {
+    // 过滤掉 Cluster
+    const nums = Object.keys(MODEL.impute.numeric||{}).filter(k => k !== 'Cluster');
+    const facs = Object.keys(MODEL.impute.factor||{}).filter(k => k !== 'Cluster');
+    cols = [...nums, ...facs];
+  } else {
+    cols = MODEL.pca?.featureNames || [];
+  }
+  const header = cols.join(',');
+  const blob = new Blob([header+'\n'], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'template.csv'; a.click();
+  URL.revokeObjectURL(url);
+};
+
 };
 </script>
 </body>
