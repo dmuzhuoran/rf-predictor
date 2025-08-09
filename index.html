@@ -2,58 +2,73 @@
 <html lang="zh">
 <head>
   <meta charset="utf-8">
-  <title>临床分型在线预测</title>
+  <title>临床分型在线预测 · PCA + RF + Platt + 距离融合</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.5;margin:24px;max-width:1100px}
-    h1{font-size:20px;margin:0 0 12px}
-    .card{border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin:12px 0}
+    :root{--bd:#e5e7eb;--txt:#111827;--muted:#6b7280;}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--txt);line-height:1.6;margin:24px;max-width:1140px}
+    h1{font-size:22px;margin:0 0 12px}
+    h2{font-size:16px;margin:0 0 10px}
+    .card{border:1px solid var(--bd);border-radius:12px;padding:16px;margin:12px 0}
     .row{display:flex;gap:16px;flex-wrap:wrap}
     .col{flex:1 1 320px}
     label{display:block;font-size:12px;color:#374151;margin:6px 0 4px}
-    input,select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #d1d5db;border-radius:8px}
+    input,select{width:100%;padding:8px;border:1px solid #d1d5db;border-radius:10px}
     button{padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
     .primary{background:#111827;color:#fff}
     .muted{background:#f3f4f6}
-    table{border-collapse:collapse;width:100%}
-    th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2ff}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2ff;margin-right:6px}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,"Courier New",monospace}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid var(--bd);padding:8px;text-align:left}
+    .hint{color:var(--muted);font-size:13px}
+    .sep{margin:16px 0;border-top:1px dashed var(--bd)}
+    .warn{color:#b45309}
+    a.btn{padding:10px 14px;border-radius:10px;background:#f3f4f6;display:inline-block;text-decoration:none;color:inherit}
   </style>
 </head>
 <body>
   <h1>临床分型在线预测</h1>
 
   <div class="card">
-    <div>步骤：<span class="pill">插补</span> → <span class="pill">标准化</span> → <span class="pill">PCA</span> → <span class="pill">随机森林</span> → <span class="pill">Platt 校准</span> → <span class="pill">中心距离融合</span> → <span class="pill">阈值拒判</span></div>
-    <div id="modelMeta" style="margin-top:8px;color:#6b7280"></div>
+    <div>
+      流程：
+      <span class="pill">插补</span>→<span class="pill">标准化</span>→<span class="pill">PCA</span>→<span class="pill">随机森林</span>→<span class="pill">Platt校准</span>→<span class="pill">中心距离融合</span>→<span class="pill">阈值拒判</span>
+    </div>
+    <div id="modelMeta" class="hint" style="margin-top:6px"></div>
   </div>
 
   <div class="row">
     <div class="card col">
-      <h2 style="font-size:16px;margin-top:0">1) 载入模型</h2>
-      <p>将 <code class="mono">model.json</code> 放在与本页同一目录。若跨域部署，允许从 URL 载入：</p>
+      <h2>1) 载入模型</h2>
       <div class="row">
         <div class="col">
-          <label>model.json URL（留空则默认同目录）</label>
+          <label>model.json URL（留空=同目录）</label>
           <input id="modelUrl" placeholder="例如：https://yourname.github.io/repo/model.json">
         </div>
       </div>
       <div style="margin-top:8px">
         <button class="primary" id="loadBtn">加载模型</button>
-        <span id="loadState" style="margin-left:8px;color:#6b7280"></span>
+        <button class="muted" id="tplBtn" disabled>下载 CSV 模板</button>
+        <span id="loadState" class="hint" style="margin-left:8px"></span>
+      </div>
+      <div class="sep"></div>
+      <div class="hint">
+        将 <span class="mono">index.html</span> 与 <span class="mono">model.json</span> 放同一目录，开 GitHub Pages 即可。<br>
+        若模型<strong>不含</strong>插补/标准化参数，则输入应为<strong>已插补+已标准化</strong>的数值，列名顺序与 <span class="mono">pca.featureNames</span> 完全一致。
       </div>
     </div>
 
     <div class="card col">
-      <h2 style="font-size:16px;margin-top:0">2) 预测参数（可调）</h2>
+      <h2>2) 预测参数（可调）</h2>
       <div class="row">
         <div class="col">
           <label>融合权重 w（模型概率占比）</label>
           <input id="wInput" type="number" step="0.01" min="0" max="1" value="0.7">
         </div>
         <div class="col">
-          <label>距离温度 α（越大越强调中心距离）</label>
+          <label>距离温度 α</label>
           <input id="alphaInput" type="number" step="0.1" min="0" value="1.0">
         </div>
         <div class="col">
@@ -61,23 +76,41 @@
           <input id="rejInput" type="number" step="0.01" min="0" max="1" value="0.7">
         </div>
       </div>
-      <div style="margin-top:8px;color:#6b7280">默认会用模型自带的参数；你也可在此临时覆盖。</div>
+      <div class="hint" style="margin-top:8px">默认使用模型内置参数，你也可在此临时覆盖。</div>
     </div>
   </div>
 
   <div class="card">
-    <h2 style="font-size:16px;margin-top:0">3) 输入患者数据</h2>
+    <h2>3) 输入患者数据（单例）</h2>
     <div id="inputForm" class="row"></div>
     <div style="margin-top:8px">
       <button class="primary" id="predictBtn" disabled>预测分型</button>
       <button class="muted" id="resetBtn" disabled>清空</button>
-      <span id="predState" style="margin-left:8px;color:#6b7280"></span>
+      <span id="predState" class="hint" style="margin-left:8px"></span>
+    </div>
+
+    <div class="sep"></div>
+    <h3 style="font-size:14px;margin:0 0 8px">批量 CSV 预测</h3>
+    <p class="hint">
+      - 若 <span class="mono">model.json</span> 含 <span class="mono">impute/normalize</span>：CSV 放<b>原始列名</b>（允许缺失）；<br>
+      - 若不含：CSV 放<b>已插补+已标准化</b>的列，列名顺序与 <span class="mono">pca.featureNames</span> 对齐。
+    </p>
+    <div class="row">
+      <div class="col">
+        <label>选择 CSV 文件</label>
+        <input id="csvFile" type="file" accept=".csv,text/csv">
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <button class="primary" id="batchBtn" disabled>批量预测</button>
+      <a id="dlLink" class="btn" style="margin-left:12px;display:none" download="batch_predictions.csv">下载结果</a>
+      <span id="batchState" class="hint" style="margin-left:8px"></span>
     </div>
   </div>
 
   <div class="card">
-    <h2 style="font-size:16px;margin-top:0">4) 结果</h2>
-    <div id="result"></div>
+    <h2>4) 结果</h2>
+    <div id="result" class="hint">尚无结果</div>
   </div>
 
 <script>
@@ -85,17 +118,17 @@ let MODEL = null;
 
 const sigmoid = x => 1/(1+Math.exp(-x));
 const logit = p => Math.log(p/(1-p));
+const argmax = a => {let m=-1,mi=-1; for(let i=0;i<a.length;i++){ if(a[i]>m){m=a[i];mi=i;} } return mi;}
 function softmaxNegDist(dists, alpha){
   const s = dists.map(d => Math.exp(-alpha * d));
-  const sum = s.reduce((a,b)=>a+b,0);
+  const sum = s.reduce((a,b)=>a+b,0)||1;
   return s.map(v => v/sum);
 }
 function rowNormalize(arr){
-  const sum = arr.reduce((a,b)=>a+b,0);
+  const sum = arr.reduce((a,b)=>a+b,0)||1;
   return arr.map(v => v/sum);
 }
 
-// 载入模型
 document.getElementById('loadBtn').onclick = async () => {
   const url = (document.getElementById('modelUrl').value || 'model.json').trim();
   const tip = document.getElementById('loadState');
@@ -105,89 +138,96 @@ document.getElementById('loadBtn').onclick = async () => {
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     MODEL = await res.json();
     tip.textContent = '已加载';
-    // 写入参数默认值
-    const meta = MODEL.meta || {};
-    document.getElementById('wInput').value = meta.fusionWeight ?? 0.7;
-    document.getElementById('alphaInput').value = meta.alphaDist ?? 1.0;
-    document.getElementById('rejInput').value = meta.rejectThreshold ?? 0.7;
 
-    // 渲染输入表单：若有 impute/normalize，就认为可接收“原始值”；否则视为“已插补+已标准化”的直接值
+    // 参数默认值
+    const meta = MODEL.meta || {};
+    document.getElementById('wInput').value     = meta.fusionWeight ?? 0.7;
+    document.getElementById('alphaInput').value = meta.alphaDist ?? 1.0;
+    document.getElementById('rejInput').value   = meta.rejectThreshold ?? 0.7;
+
+    // 渲染输入表单
     renderForm();
     document.getElementById('predictBtn').disabled = false;
     document.getElementById('resetBtn').disabled = false;
+    document.getElementById('batchBtn').disabled = false;
+    document.getElementById('tplBtn').disabled = false;
 
-    // 显示模型信息
+    // 模型信息
     const metaDiv = document.getElementById('modelMeta');
     const cls = (meta.classes || MODEL.rf?.classes || []).join(', ');
     const hasImpute = !!MODEL.impute;
     const hasNorm = !!MODEL.normalize;
-    metaDiv.innerHTML = `
-      类别：<b>${cls}</b> ｜ 主成分数：<b>${(MODEL.pca?.pcNames||[]).length}</b> ｜ 树数：<b>${MODEL.rf?.trees?.length||0}</b><br>
-      预处理：${hasImpute?'插补✓':'插补×'}；${hasNorm?'标准化✓':'标准化×'}；PCA✓
-    `;
+    metaDiv.innerHTML =
+      `类别：<b>${cls}</b> ｜ 主成分数：<b>${(MODEL.pca?.pcNames||[]).length}</b> ｜ 树数：<b>${MODEL.rf?.trees?.length||0}</b><br>` +
+      `预处理：${hasImpute?'插补✓':'插补×'}；${hasNorm?'标准化✓':'标准化×'}；PCA✓`;
   }catch(e){
     tip.textContent = '加载失败：' + e.message;
     console.error(e);
   }
 };
 
+document.getElementById('tplBtn').onclick = () => {
+  if(!MODEL) return;
+  // 若有 impute：按“原始列”生成；否则按 PCA 前特征（哑后）生成
+  let cols = [];
+  if(MODEL.impute){
+    const nums = Object.keys(MODEL.impute.numeric||{});
+    const facs = Object.keys(MODEL.impute.factor||{});
+    cols = [...nums, ...facs];
+  }else{
+    cols = MODEL.pca?.featureNames || [];
+  }
+  const header = cols.join(',');
+  const blob = new Blob([header+'\n'], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'template.csv'; a.click();
+  URL.revokeObjectURL(url);
+};
+
 function renderForm(){
   const wrap = document.getElementById('inputForm');
   wrap.innerHTML = '';
-  // 如果包含 impute（原始数据），从原始列渲染；否则从 PCA 前特征名（已哑变量后）渲染数值输入
   if(MODEL.impute){
     const numKeys = Object.keys(MODEL.impute.numeric||{});
     const facKeys = Object.keys(MODEL.impute.factor||{});
     const catLevels = MODEL.impute.categorical_levels || {};
 
-    // 数值原始列
-    numKeys.forEach(k=>{
-      wrap.appendChild(fieldNumber(k));
-    });
-    // 因子原始列（使用下拉）
+    numKeys.forEach(k=>wrap.appendChild(fieldNumber(k)));
     facKeys.forEach(k=>{
-      const sel = document.createElement('select');
-      sel.id = 'fld_'+k;
-      const labs = (catLevels[k]||[]);
-      // 加一个空值选项（将被用众数插补）
-      const opt0 = document.createElement('option');
-      opt0.value = ''; opt0.textContent = '(缺失)';
-      sel.appendChild(opt0);
-      labs.forEach(v=>{
-        const opt = document.createElement('option');
-        opt.value = v; opt.textContent = v;
-        sel.appendChild(opt);
+      const sel = document.createElement('select'); sel.id = 'fld_'+k;
+      const opt0 = document.createElement('option'); opt0.value=''; opt0.textContent='(缺失)'; sel.appendChild(opt0);
+      (catLevels[k]||[]).forEach(v=>{
+        const o = document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o);
       });
-      const div = containerFor(k, sel);
-      wrap.appendChild(div);
+      wrap.appendChild(containerFor(k, sel));
     });
-
   }else{
-    // 无 impute：用户需输入“已插补+已标准化后的数值”
     const baseNames = MODEL.pca?.featureNames || [];
-    baseNames.forEach(k=>{
-      wrap.appendChild(fieldNumber(k));
-    });
+    baseNames.forEach(k=>wrap.appendChild(fieldNumber(k)));
+    const warn = document.createElement('div');
+    warn.className='hint warn';
+    warn.textContent = '当前模型不含插补/标准化参数：请提供“已插补 + 已标准化”的数值，并与 featureNames 完全对齐。';
+    wrap.appendChild(warn);
   }
 }
 function fieldNumber(name){
   const inp = document.createElement('input');
-  inp.type = 'number'; inp.step='any'; inp.id = 'fld_'+name;
+  inp.type='number'; inp.step='any'; inp.id='fld_'+name;
   return containerFor(name, inp);
 }
 function containerFor(name, node){
   const div = document.createElement('div'); div.className='col';
-  const lab = document.createElement('label'); lab.htmlFor='fld_'+name; lab.textContent = name;
+  const lab = document.createElement('label'); lab.htmlFor='fld_'+name; lab.textContent=name;
   div.appendChild(lab); div.appendChild(node);
   return div;
 }
 document.getElementById('resetBtn').onclick = ()=>{
-  Array.from(document.querySelectorAll('#inputForm input, #inputForm select')).forEach(el=>el.value='');
-  document.getElementById('result').innerHTML = '';
-  document.getElementById('predState').textContent = '';
+  document.getElementById('predState').textContent='';
+  document.getElementById('result').textContent='尚无结果';
+  document.querySelectorAll('#inputForm input, #inputForm select').forEach(el=>el.value='');
 };
 
-// 主流程
 document.getElementById('predictBtn').onclick = ()=>{
   if(!MODEL){ alert('请先加载模型'); return; }
   const t0 = performance.now();
@@ -196,10 +236,9 @@ document.getElementById('predictBtn').onclick = ()=>{
   const alpha = parseFloat(document.getElementById('alphaInput').value || meta.alphaDist || 1.0);
   const rej = parseFloat(document.getElementById('rejInput').value || meta.rejectThreshold || 0.7);
 
-  // 1) 读取输入 & 插补
-  let feats = {}; // “PCA前（哑变量后）”的特征字典
+  // 1) 输入 & 插补 -> 构造“PCA前（哑后）特征”feats
+  let feats = {};
   if(MODEL.impute){
-    // 原始列
     const numKeys = Object.keys(MODEL.impute.numeric||{});
     const facKeys = Object.keys(MODEL.impute.factor||{});
     const catLevels = MODEL.impute.categorical_levels || {};
@@ -214,42 +253,30 @@ document.getElementById('predictBtn').onclick = ()=>{
       raw[k] = (v===''? null : v);
     });
 
-    // 数值插补：中位数
+    // 数值插补
     numKeys.forEach(k=>{
-      if(raw[k]===null || Number.isNaN(raw[k])){
-        raw[k] = MODEL.impute.numeric[k];
-      }
+      if(raw[k]===null || Number.isNaN(raw[k])) raw[k] = MODEL.impute.numeric[k];
     });
-    // 因子插补：众数
+    // 因子插补
     facKeys.forEach(k=>{
-      if(raw[k]===null || raw[k]===''){
-        raw[k] = MODEL.impute.factor[k];
-      }
+      if(raw[k]===null || raw[k]==='') raw[k] = MODEL.impute.factor[k];
     });
 
-    // one-hot 展开（recipes 默认 var_level 命名）
-    // 先把所有“PCA前特征名”置零
+    // 初始化全部哑变量后列为0
     const baseNames = MODEL.pca.featureNames || [];
     baseNames.forEach(n=>feats[n]=0);
 
-    // 填充数值原始列（名字在 one-hot 后一般保持原名）
-    numKeys.forEach(k=>{
-      if(k in feats) feats[k] = raw[k];
-    });
-    // 填充因子 one-hot
+    // 写入数值原始列
+    numKeys.forEach(k=>{ if(k in feats) feats[k]=raw[k]; });
+    // 写入因子 one-hot（命名：var_level）
     facKeys.forEach(k=>{
-      const levels = catLevels[k] || [];
-      levels.forEach(lv=>{
-        const colName = `${k}_${lv}`; // 与 step_dummy 默认一致
-        if(colName in feats){
-          feats[colName] = (raw[k]===lv)? 1 : 0;
-        }
+      (catLevels[k]||[]).forEach(lv=>{
+        const col = `${k}_${lv}`;
+        if(col in feats) feats[col] = (raw[k]===lv)? 1 : 0;
       });
     });
-
   }else{
-    // 直接读取“已插补+已标准化”的数值（列名必须与 featureNames 对齐）
-    const baseNames = MODEL.pca.featureNames || [];
+    const baseNames = MODEL.pca?.featureNames || [];
     baseNames.forEach(k=>{
       const v = document.getElementById('fld_'+k).value;
       if(v==='') throw new Error(`缺少已标准化特征：${k}`);
@@ -257,55 +284,41 @@ document.getElementById('predictBtn').onclick = ()=>{
     });
   }
 
-  // 2) 标准化（如果模型提供了 normalize）
+  // 2) 标准化（若模型提供）
   if(MODEL.normalize && MODEL.normalize.names){
-    const names = MODEL.normalize.names;
-    const means = MODEL.normalize.means;
-    const sds   = MODEL.normalize.sds;
+    const names = MODEL.normalize.names, means = MODEL.normalize.means, sds = MODEL.normalize.sds;
     for(let i=0;i<names.length;i++){
-      const n = names[i];
-      if(!(n in feats)) { feats[n]=0; } // 容错
+      const n = names[i]; if(!(n in feats)) feats[n]=0;
       feats[n] = (feats[n] - means[i]) / (sds[i] || 1);
     }
   }
 
-  // 3) PCA 投影：x_std -> scale(., center, scale) -> %*% rotation
+  // 3) PCA 投影：center/scale（来自 prcomp）→ rotation
   const featureNames = MODEL.pca.featureNames || [];
   const rotation = MODEL.pca.rotation;
   const pcNames = MODEL.pca.pcNames || [];
-  const pcCount = pcNames.length;
-
-  // 组装向量（按 featureNames 顺序）
   const x = featureNames.map(n => feats[n] ?? 0);
-  const cen = MODEL.pca.center || null;
-  const scl = MODEL.pca.scale  || null;
-  const xcs = x.map((v,i)=>{
-    const vv = (cen? (v - cen[i]) : v);
-    return scl? (vv / (scl[i] || 1)) : vv;
-  });
-  // 矩阵乘：xcs (1 x p) * rotation (p x k)
-  const PCs = new Array(pcCount).fill(0);
-  for(let k=0;k<pcCount;k++){
-    let sum = 0;
-    for(let j=0;j<xcs.length;j++){
-      sum += xcs[j] * rotation[j][k];
-    }
-    PCs[k] = sum;
+  const cen = MODEL.pca.center || null, scl = MODEL.pca.scale || null;
+  const xcs = x.map((v,i)=> (scl ? ((cen? v-cen[i] : v)/(scl[i]||1)) : (cen? v-cen[i] : v)));
+  const PCs = new Array(pcNames.length).fill(0);
+  for(let k=0;k<pcNames.length;k++){
+    let s=0; for(let j=0;j<xcs.length;j++) s += xcs[j] * rotation[j][k];
+    PCs[k]=s;
   }
 
-  // 4) 随机森林推理（树在 PC 空间上）
+  // 4) RF 概率
   const probs = rfPredictProbaPC(PCs, MODEL.rf);
-  // 5) Platt 校准（逐类），再行归一化
+  // 5) Platt 校准
   const Pcal = plattCalibrate(probs, MODEL.calibrators);
-  // 6) 中心距离融合
+  // 6) 距离融合
   const S = centroidSimilarity(PCs, MODEL.centroids, alpha);
   const Pfused = fuseProba(Pcal, S, w);
   const pmax = Math.max(...Pfused);
   const kmax = argmax(Pfused);
   const label = (pmax >= rej)? (MODEL.meta.classes?.[kmax] || kmax) : 'Uncertain';
 
-  const t1 = performance.now();
-  renderResult(label, pmax, Pfused, S, kmax, t1 - t0);
+  const ms = (performance.now()-t0).toFixed(1);
+  renderResult(label, pmax, Pfused, S, kmax, ms);
   document.getElementById('predState').textContent = '完成';
 };
 
@@ -314,47 +327,32 @@ function rfPredictProbaPC(PCs, rf){
   const K = (rf.classes||[]).length;
   const acc = new Array(K).fill(0);
   for(const tree of trees){
-    // 遍历
-    let idx = 1; // 我们导出的节点是 1-based 数组（见 R 侧 id_index）
-    // 实际上 extract_tree_with_leaf_probs 输出 nodes[1..N] 顺序对应 node_ids 升序
-    // 这里按数组索引从 1 开始；JS 数组 0 基，做个减一处理
-    let cur = tree[0]; // 初始就是第一个节点
-    // 为稳妥，我们循环直到叶子（无 i/t/l/r，只有 p）
-    while(cur && cur.i !== undefined){
-      const fi = cur.i - 1; // 1-based -> 0-based
-      const thr = cur.t;
-      const goLeft = PCs[fi] <= thr;
-      const nextIndex = (goLeft? cur.l : cur.r) - 1;
-      cur = tree[nextIndex];
+    let node = tree[0];
+    while(node && node.i !== undefined){
+      const fi = node.i - 1; // 1-based → 0-based
+      const thr = node.t;
+      node = tree[( (PCs[fi] <= thr ? node.l : node.r) - 1 )];
     }
-    const leafp = cur && cur.p ? cur.p : new Array(K).fill(1/K);
-    for(let k=0;k<K;k++) acc[k] += leafp[k];
+    const leaf = node && node.p ? node.p : new Array(K).fill(1/K);
+    for(let k=0;k<K;k++) acc[k]+=leaf[k];
   }
-  return acc.map(v => v / (trees.length || 1));
+  return acc.map(v => v/(trees.length||1));
 }
-
 function plattCalibrate(pRaw, calibrators){
-  if(!calibrators) return pRaw;
-  const clipped = pRaw.map(p => Math.min(Math.max(p, 1e-6), 1-1e-6));
-  const logits = clipped.map(p => logit(p));
+  if(!calibrators) return pRaw.slice();
   const out = [];
   for(let k=0;k<calibrators.length;k++){
     const ab = calibrators[k]; // [a,b]
-    const p = sigmoid((ab[0] ?? 0) + (ab[1] ?? 1) * logits[k]);
-    out.push(p);
+    const p = Math.min(Math.max(pRaw[k], 1e-6), 1-1e-6);
+    const s = logit(p);
+    out.push(sigmoid((ab?.[0]||0) + (ab?.[1]||1)*s));
   }
   return rowNormalize(out);
 }
-
 function centroidSimilarity(PCs, centroids, alpha){
-  const labels = centroids.labels || [];
   const M = centroids.matrix || [];
   const dists = M.map(row=>{
-    let s=0;
-    for(let i=0;i<row.length;i++){
-      const diff = PCs[i] - row[i];
-      s += diff*diff;
-    }
+    let s=0; for(let i=0;i<row.length;i++){ const d=PCs[i]-row[i]; s+=d*d; }
     return Math.sqrt(s);
   });
   return softmaxNegDist(dists, alpha);
@@ -362,21 +360,146 @@ function centroidSimilarity(PCs, centroids, alpha){
 function fuseProba(Pcal, S, w){
   const K = Math.max(Pcal.length, S.length);
   const out = new Array(K);
-  for(let k=0;k<K;k++){
-    out[k] = (w * (Pcal[k]||0)) + ((1-w) * (S[k]||0));
-  }
+  for(let k=0;k<K;k++) out[k] = (w*(Pcal[k]||0))+((1-w)*(S[k]||0));
   return out;
 }
-function argmax(a){ let m=-1,mi=-1; for(let i=0;i<a.length;i++){ if(a[i]>m){m=a[i];mi=i;} } return mi; }
-
 function renderResult(label, pmax, Pfused, S, kmax, ms){
   const cls = MODEL.meta.classes || [];
-  const rows = Pfused.map((p,i)=>`<tr><td>${cls[i]||i}</td><td>${p.toFixed(4)}</td><td>${S[i].toFixed(4)}</td></tr>`).join('');
-  document.getElementById('result').innerHTML = `
-    <p>预测分型：<b>${label}</b> ｜ 置信度 p<sub>max</sub>=<b>${pmax.toFixed(4)}</b> ｜ 用时 ${(ms).toFixed(1)} ms</p>
-    <table><thead><tr><th>分型</th><th>融合后概率</th><th>中心相似度</th></tr></thead><tbody>${rows}</tbody></table>
-  `;
+  const rows = Pfused.map((p,i)=>`<tr><td>${cls[i]||i}</td><td>${p.toFixed(6)}</td><td>${S[i].toFixed(6)}</td></tr>`).join('');
+  document.getElementById('result').innerHTML =
+    `<p>预测分型：<b>${label}</b> ｜ 置信度 p<sub>max</sub>=<b>${pmax.toFixed(6)}</b> ｜ 用时 ${ms} ms</p>
+     <table><thead><tr><th>分型</th><th>融合后概率</th><th>中心相似度</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
+
+// ===== 批量 CSV =====
+function parseCSV(text){
+  const lines = text.replace(/\r/g,'').split('\n').filter(x=>x.trim().length>0);
+  if(!lines.length) return {header:[],rows:[]};
+  const header = lines[0].split(',').map(h=>h.trim());
+  const rows = [];
+  for(let i=1;i<lines.length;i++){
+    const cols = lines[i].split(','); // 简化：不处理复杂转义
+    const rec = {};
+    header.forEach((h,idx)=>{ rec[h] = (cols[idx]!==undefined? cols[idx].trim() : ''); });
+    rows.push(rec);
+  }
+  return {header, rows};
+}
+function toCSV(arr){
+  if(!arr.length) return '';
+  const cols = Object.keys(arr[0]);
+  const head = cols.join(',');
+  const body = arr.map(o => cols.map(k=>{
+    const v = (o[k]===undefined||o[k]===null)? '' : String(o[k]);
+    return v.includes(',') ? `"${v.replace(/"/g,'""')}"` : v;
+  }).join(',')).join('\n');
+  return head + '\n' + body;
+}
+function predictFromRecord(record){
+  let feats = {};
+  if(MODEL.impute){
+    const numKeys = Object.keys(MODEL.impute.numeric||{});
+    const facKeys = Object.keys(MODEL.impute.factor||{});
+    const catLevels = MODEL.impute.categorical_levels || {};
+
+    let raw = {};
+    numKeys.forEach(k=>{
+      const val = record[k]; raw[k] = (val===''||val==null)? null : parseFloat(val);
+    });
+    facKeys.forEach(k=>{
+      const val = record[k]; raw[k] = (val===''||val==null)? null : String(val);
+    });
+
+    numKeys.forEach(k=>{ if(raw[k]===null || Number.isNaN(raw[k])) raw[k]=MODEL.impute.numeric[k]; });
+    facKeys.forEach(k=>{ if(raw[k]===null || raw[k]==='') raw[k]=MODEL.impute.factor[k]; });
+
+    const baseNames = MODEL.pca.featureNames || [];
+    baseNames.forEach(n=>feats[n]=0);
+    numKeys.forEach(k=>{ if(k in feats) feats[k]=raw[k]; });
+    facKeys.forEach(k=>{
+      (catLevels[k]||[]).forEach(lv=>{
+        const col = `${k}_${lv}`; if(col in feats) feats[col] = (raw[k]===lv)?1:0;
+      });
+    });
+  }else{
+    const baseNames = MODEL.pca.featureNames || [];
+    baseNames.forEach(k=>{
+      const v = record[k];
+      if(v===undefined || v==='') throw new Error(`CSV 缺少列：${k}`);
+      feats[k] = parseFloat(v);
+    });
+  }
+
+  if(MODEL.normalize && MODEL.normalize.names){
+    const names = MODEL.normalize.names, means = MODEL.normalize.means, sds = MODEL.normalize.sds;
+    for(let i=0;i<names.length;i++){
+      const n = names[i]; if(!(n in feats)) feats[n]=0;
+      feats[n] = (feats[n] - means[i]) / (sds[i] || 1);
+    }
+  }
+
+  const featureNames = MODEL.pca.featureNames || [];
+  const rotation = MODEL.pca.rotation;
+  const pcNames = MODEL.pca.pcNames || [];
+  const x = featureNames.map(n => feats[n] ?? 0);
+  const cen = MODEL.pca.center || null, scl = MODEL.pca.scale || null;
+  const xcs = x.map((v,i)=> (scl ? ((cen? v-cen[i] : v)/(scl[i]||1)) : (cen? v-cen[i] : v)));
+  const PCs = new Array(pcNames.length).fill(0);
+  for(let c=0;c<pcNames.length;c++){
+    let s=0; for(let j=0;j<xcs.length;j++) s += xcs[j]*rotation[j][c];
+    PCs[c]=s;
+  }
+
+  const probs = rfPredictProbaPC(PCs, MODEL.rf);
+  const Pcal = plattCalibrate(probs, MODEL.calibrators);
+
+  const alpha = (MODEL.meta?.alphaDist ?? 1.0);
+  const w     = (MODEL.meta?.fusionWeight ?? 0.7);
+  const rej   = (MODEL.meta?.rejectThreshold ?? 0.7);
+
+  const S = centroidSimilarity(PCs, MODEL.centroids, alpha);
+  const Pfused = fuseProba(Pcal, S, w);
+  const pmax = Math.max(...Pfused);
+  const kmax = argmax(Pfused);
+  const label = (pmax >= rej)? (MODEL.meta.classes?.[kmax] || String(kmax)) : 'Uncertain';
+
+  const out = { pred_cluster: label, p_max: +pmax.toFixed(6) };
+  (MODEL.meta.classes||[]).forEach((cls,i)=>{ out['P_'+cls] = +Pfused[i].toFixed(6); });
+  return out;
+}
+
+document.getElementById('batchBtn').onclick = async ()=>{
+  const f = document.getElementById('csvFile').files[0];
+  const tip = document.getElementById('batchState');
+  if(!MODEL){ alert('请先加载模型'); return; }
+  if(!f){ alert('请选择 CSV 文件'); return; }
+  try{
+    tip.textContent = '解析中…';
+    const text = await f.text();
+    const {header, rows} = parseCSV(text);
+    if(!rows.length) throw new Error('空文件');
+    tip.textContent = `共 ${rows.length} 条，预测中…`;
+
+    const results = [];
+    for(let i=0;i<rows.length;i++){
+      const rec = rows[i];
+      const pred = predictFromRecord(rec);
+      results.push({...rec, ...pred});
+      if((i+1)%50===0) tip.textContent = `已完成 ${i+1}/${rows.length}…`;
+    }
+    tip.textContent = `完成 ${rows.length} 条`;
+
+    const csv = toCSV(results);
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.getElementById('dlLink');
+    a.href = url; a.style.display='inline-block';
+  }catch(e){
+    tip.textContent = '失败：' + e.message;
+    console.error(e);
+  }
+};
 </script>
 </body>
 </html>
+
