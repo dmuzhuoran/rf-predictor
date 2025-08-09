@@ -35,12 +35,8 @@
       "ALP": 91,
       "Albumin": 35.5
     },
-    "factor": {
-      "Cluster": "2"
-    },
-    "categorical_levels": {
-      "Cluster": ["1", "2", "3"]
-    }
+    "factor": {},
+    "categorical_levels": {}
   },
   "normalize": {
     "names": ["Age", "Female", "Fever", "Weight.loss", "Proximal.pain", "Peripheral.arthritis", "Headache", "Jaw.claudication", "Visual.symptoms", "ESR", "CRP", "WBC", "Hb", "PLT", "Neutrophils", "Lymphocytes", "Hct", "RDW", "RF", "CCP", "ANA", "ALT", "AST", "GGT", "ALP", "Albumin"],
