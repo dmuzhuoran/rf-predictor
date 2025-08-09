@@ -41,16 +41,18 @@
 
   <div class="row">
     <div class="card col">
-      <h2 style="margin-top:0">模型状态</h2>
-      <div id="loadState" class="hint">正在加载 model.json…</div>
-
-      <div class="sep"></div>
+      <h2>1) 载入模型</h2>
       <div class="row">
-        <div class="col" style="max-width:220px">
-          <button class="muted" id="tplBtn" disabled>下载 CSV 模板</button>
+        <div class="col">
+          <label>model.json URL（留空=同目录）</label>
+          <input id="modelUrl" placeholder="例如：https://yourname.github.io/repo/model.json">
         </div>
       </div>
-
+      <div style="margin-top:8px">
+        <button class="primary" id="loadBtn">加载模型</button>
+        <button class="muted" id="tplBtn" disabled>下载 CSV 模板</button>
+        <span id="loadState" class="hint" style="margin-left:8px"></span>
+      </div>
       <div class="sep"></div>
       <div class="hint">
         将 <span class="mono">index.html</span> 与 <span class="mono">model.json</span> 放同一目录，开 GitHub Pages 即可。<br>
@@ -127,116 +129,18 @@ function rowNormalize(arr){
   return arr.map(v => v/sum);
 }
 
-// 页面加载后自动读取 model.json，并初始化界面
-// 带超时与错误提示的自动加载；支持本地文件回退
-// ===== 自动加载模型（同目录 model.json），不提供手动/本地选择 =====
-async function autoLoadModel(){
+document.getElementById('loadBtn').onclick = async () => {
+  const url = (document.getElementById('modelUrl').value || 'model.json').trim();
   const tip = document.getElementById('loadState');
+  tip.textContent = '加载中…';
   try{
-    tip.textContent = '正在加载 model.json…';
-    const res = await fetch('model.json', {cache:'no-store'});
+    const res = await fetch(url, {cache:'no-store'});
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     MODEL = await res.json();
-    afterModelLoaded();
     tip.textContent = '已加载';
-  }catch(e){
-    tip.textContent = '加载失败：'+ e.message + '（请确认 model.json 与本页在同一目录，并通过 http(s) 访问）';
-    console.error(e);
-  }
-}
-window.addEventListener('DOMContentLoaded', autoLoadModel);
- }catch(_){
-    document.getElementById('loadState').textContent = '未加载（请点击“加载模型”或选择本地文件）';
-  }
-});
-  const enableUI = () => {
-    // 参数默认值
-    const meta = MODEL.meta || {};
-    document.getElementById('wInput').value     = meta.fusionWeight ?? 0.7;
-    document.getElementById('alphaInput').value = meta.alphaDist ?? 1.0;
-    document.getElementById('rejInput').value   = meta.rejectThreshold ?? 0.7;
-    // 渲染输入表单 & 启用按钮
-    renderForm();
-    document.getElementById('predictBtn').disabled = false;
-    document.getElementById('resetBtn').disabled   = false;
-    document.getElementById('batchBtn').disabled   = false;
-    document.getElementById('tplBtn').disabled     = false;
-    // 顶部模型信息
-    const metaDiv = document.getElementById('modelMeta');
-    const cls = ((MODEL.meta && MODEL.meta.classes) || (MODEL.rf && MODEL.rf.classes) || []).join(', ');
-    const hasImpute = !!MODEL.impute;
-    const hasNorm   = !!MODEL.normalize;
-    metaDiv.innerHTML = `类别：<b>${cls}</b> ｜ 主成分数：<b>${(MODEL.pca?.pcNames||[]).length}</b> ｜ 树数：<b>${MODEL.rf?.trees?.length||0}</b><br>`+
-                        `预处理：${hasImpute?'插补✓':'插补×'}；${hasNorm?'标准化✓':'标准化×'}；PCA✓`;
-    tip.textContent = '已加载';
-  };
-
-  // 超时 fetch 封装
-  const fetchWithTimeout = (url, opts={}, ms=8000) => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), ms);
-    return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
-  };
-
-  try {
-    tip.textContent = '正在从同目录读取 model.json…';
-    // 若是 file:// 打开，某些浏览器会阻止 fetch，本地会报错；我们给出提示并提供本地选择回退
-    const res = await fetchWithTimeout('model.json', {cache:'no-store'});
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    MODEL = await res.json();
-    enableUI();
-  } catch (e) {
-    console.warn('自动加载失败：', e);
-    tip.innerHTML = '自动加载失败。常见原因：未与 <span class="mono">index.html</span> 放同一目录；或以 <span class="mono">file://</span> 打开被浏览器拦截。<br>你可以点击“从本地选择 model.json”手动加载。';
-  }
-
-  // 绑定本地文件选择
-  const pickBtn = document.getElementById('pickLocalBtn');
-  const fileInp = document.getElementById('modelFile');
-  pickBtn.addEventListener('click', () => fileInp.click());
-  fileInp.addEventListener('change', async () => {
-    const f = fileInp.files[0];
-    if (!f) return;
-    try {
-      const text = await f.text();
-      MODEL = JSON.parse(text);
-      tip.textContent = '已从本地文件加载';
-      enableUI();
-    } catch (err) {
-      tip.textContent = '本地文件解析失败：' + err.message;
-    }
-  });
-});
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    MODEL = await res.json();
 
     // 参数默认值
     const meta = MODEL.meta || {};
-    document.getElementById('wInput').value     = meta.fusionWeight ?? 0.7;
-    document.getElementById('alphaInput').value = meta.alphaDist ?? 1.0;
-    document.getElementById('rejInput').value   = meta.rejectThreshold ?? 0.7;
-
-    // 渲染输入表单 & 启用按钮
-    renderForm();
-    document.getElementById('predictBtn').disabled = false;
-    document.getElementById('resetBtn').disabled   = false;
-    document.getElementById('batchBtn').disabled   = false;
-    document.getElementById('tplBtn').disabled     = false;
-
-    // 顶部模型信息
-    const metaDiv = document.getElementById('modelMeta');
-    const cls = (meta.classes || MODEL.rf?.classes || []).join(', ');
-    const hasImpute = !!MODEL.impute;
-    const hasNorm = !!MODEL.normalize;
-    metaDiv.innerHTML =
-      `类别：<b>${cls}</b> ｜ 主成分数：<b>${(MODEL.pca?.pcNames||[]).length}</b> ｜ 树数：<b>${MODEL.rf?.trees?.length||0}</b><br>` +
-      `预处理：${hasImpute?'插补✓':'插补×'}；${hasNorm?'标准化✓':'标准化×'}；PCA✓`;
-    tip.textContent = '已加载';
-  } catch (e) {
-    tip.textContent = '加载失败：' + e.message;
-    console.error(e);
-  }
-});
     document.getElementById('wInput').value     = meta.fusionWeight ?? 0.7;
     document.getElementById('alphaInput').value = meta.alphaDist ?? 1.0;
     document.getElementById('rejInput').value   = meta.rejectThreshold ?? 0.7;
@@ -264,18 +168,17 @@ window.addEventListener('DOMContentLoaded', autoLoadModel);
 
 document.getElementById('tplBtn').onclick = () => {
   if(!MODEL) return;
-  // 若有 impute：按原始列导出模板；否则按 PCA 前特征（哑后）
+  // 若有 impute：按“原始列”生成；否则按 PCA 前特征（哑后）生成
   let cols = [];
-  if (MODEL.impute) {
-    const nums = Object.keys(MODEL.impute.numeric||{}).filter(k => k !== 'Cluster');
-    const facs = Object.keys(MODEL.impute.factor||{}).filter(k => k !== 'Cluster');
+  if(MODEL.impute){
+    const nums = Object.keys(MODEL.impute.numeric||{});
+    const facs = Object.keys(MODEL.impute.factor||{});
     cols = [...nums, ...facs];
-  } else {
+  }else{
     cols = MODEL.pca?.featureNames || [];
   }
   const header = cols.join(',');
-  const blob = new Blob([header+'
-'], {type:'text/csv;charset=utf-8;'});
+  const blob = new Blob([header+'\n'], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = 'template.csv'; a.click();
