@@ -171,6 +171,92 @@ class Fusion {
   }
 }
 
+/* =========================
+   NEW: Input validation & constraints
+   - Missing > 30% => reject ("Uncertain")
+   - Binary numeric variables must be 0 or 1
+   - Optional numeric bounds via model.meta.numericBounds
+   ========================= */
+const InputRules = {
+  // 固定的二分类数值变量集合（按你的要求）：
+  DEFAULT_BINARY_NUMERIC: new Set([
+    'Female','Fever','Weight.loss','Proximal.pain','Peripheral.arthritis',
+    'Headache','Jaw.claudication','Visual.symptoms','RF','CCP','ANA'
+  ]),
+
+  getFieldSets(model){
+    if(model.impute){
+      return {
+        numKeys: Object.keys(model.impute.numeric||{}),
+        facKeys: Object.keys(model.impute.factor||{}),
+        catLevels: model.impute.categorical_levels || {}
+      };
+    }else{
+      // 无插补信息时，回退到 PCA 的基础特征名
+      const base = model.pca?.featureNames || [];
+      return { numKeys: base, facKeys: [], catLevels: {} };
+    }
+  },
+
+  getBinaryNumericSet(model){
+    const list = model?.meta?.binaryNumeric || [];
+    if(Array.isArray(list) && list.length) return new Set(list);
+    return this.DEFAULT_BINARY_NUMERIC;
+  },
+
+  getNumericBounds(model){
+    // 期望：model.meta.numericBounds = { Age:{min:0,max:120}, ESR:{min:0,max:200}, ... }
+    return (model?.meta?.numericBounds) || {};
+  },
+
+  validateRecord(record, model){
+    const {numKeys, facKeys, catLevels} = this.getFieldSets(model);
+    const binSet = this.getBinaryNumericSet(model);
+    const bounds = this.getNumericBounds(model);
+
+    let missing = 0;
+    const total = numKeys.length + facKeys.length;
+    const problems = []; // e.g., BIN:<name>, RANGE:<name>, LEVEL:<name>, NaN:<name>
+
+    for(const k of numKeys){
+      let raw = record[k];
+      if(raw === '' || raw === null || raw === undefined){ missing++; continue; }
+      const v = (typeof raw === 'number') ? raw : parseFloat(raw);
+      if(Number.isNaN(v)){ problems.push(`NaN:${k}`); continue; }
+      if(binSet.has(k) && !(v === 0 || v === 1)){ problems.push(`BIN:${k}`); }
+      const b = bounds[k];
+      if(b && ((b.min!==undefined && v < b.min) || (b.max!==undefined && v > b.max))){
+        problems.push(`RANGE:${k}`);
+      }
+    }
+
+    for(const k of facKeys){
+      const raw = record[k];
+      if(raw === '' || raw === null || raw === undefined){ missing++; continue; }
+      const levels = catLevels[k] || [];
+      if(levels.length && !levels.includes(String(raw))){
+        problems.push(`LEVEL:${k}`);
+      }
+    }
+
+    const missRatio = total ? (missing/total) : 0;
+    const ok = (problems.length === 0) && (missRatio <= 0.30);
+    return { ok, missingRatio: missRatio, problems };
+  },
+
+  makeUncertainPred(model){
+    const K = (model.meta?.classes || []).length;
+    return {
+      label: 'Uncertain',
+      pmax: 0,
+      Pfused: new Array(K).fill(0),
+      S: new Array(K).fill(0),
+      kmax: -1,
+      PCs: []
+    };
+  }
+};
+
 class ModelRuntime {
   constructor(model){
     this.model = model;
@@ -211,7 +297,7 @@ class ModelRuntime {
 }
 
 /* =========================
-   View Layer (UI) — Fault-tolerant for missing placeholders
+   View Layer (UI)
    ========================= */
 const View = {
   els: {
@@ -250,7 +336,7 @@ const View = {
   },
 
   renderMeta(model){
-    if (!this.els.modelMeta) return; // tolerate missing meta placeholder
+    if (!this.els.modelMeta) return;
     const meta = model.meta || {};
     const cls = (meta.classes || model.rf?.classes || []).join(', ');
     const hasImpute = !!model.impute;
@@ -265,9 +351,24 @@ const View = {
     if (!wrap) return;
     wrap.innerHTML = '';
 
+    // 获取限制集合
+    const binSet = InputRules.getBinaryNumericSet(model);
+    const numBounds = InputRules.getNumericBounds(model);
+
     const fieldNumber = (name)=>{
       const inp = document.createElement('input');
       inp.type='number'; inp.step='any'; inp.id='fld_'+name;
+
+      // 二分类数值强制 0/1
+      if(binSet.has(name)){
+        inp.min = 0; inp.max = 1; inp.step = 1; inp.placeholder = '0 or 1';
+      }
+      // 数值范围限制（若在 model.meta.numericBounds 提供）
+      const b = numBounds[name];
+      if(b){
+        if(b.min !== undefined) inp.min = b.min;
+        if(b.max !== undefined) inp.max = b.max;
+      }
       return this._containerFor(name, inp);
     };
 
@@ -334,12 +435,13 @@ const View = {
     this.els.inputForm.querySelectorAll('input,select').forEach(el=>el.value='');
   },
 
-  renderResult(model, pred, ms){
+  renderResult(model, pred, ms, extraNote){
     if (!this.els.result) return;
+    const note = extraNote ? `<div class="hint warn" style="margin:6px 0">${extraNote}</div>` : '';
     const cls = model.meta.classes || [];
     const rows = pred.Pfused.map((p,i)=>`<tr><td>${cls[i]||i}</td><td>${p.toFixed(6)}</td><td>${pred.S[i].toFixed(6)}</td></tr>`).join('');
     this.els.result.innerHTML =
-      `<p>Predicted subtype: <b>${pred.label}</b> | Confidence p<sub>max</sub>=<b>${pred.pmax.toFixed(6)}</b> | Time ${ms.toFixed(1)} ms</p>
+      `${note}<p>Predicted subtype: <b>${pred.label}</b> | Confidence p<sub>max</sub>=<b>${pred.pmax.toFixed(6)}</b> | Time ${ms.toFixed(1)} ms</p>
        <table><thead><tr><th>Class</th><th>Fused probability</th><th>Centroid similarity</th></tr></thead><tbody>${rows}</tbody></table>`;
   },
 
@@ -411,6 +513,21 @@ const Controller = {
 
     try{
       const record = View.readSingleInput(model);
+
+      // --- 校验（缺失>30%=>Uncertain；二分类与范围限制） ---
+      const v = InputRules.validateRecord(record, model);
+      if(v.missingRatio > 0.30){
+        const pred = InputRules.makeUncertainPred(model);
+        View.setPredState('Auto-rejected: missing rate > 30%');
+        View.renderResult(model, pred, performance.now()-t0, 'Auto-rejected due to missing > 30%.');
+        return;
+      }
+      if(!v.ok){
+        View.setPredState('Invalid input: ' + v.problems.join('; '));
+        return;
+      }
+      // -----------------------------------------------------
+
       const pred = this.runtime.predictOne(record, {w, alpha, rej});
       View.setPredState('Done');
       View.renderResult(model, pred, performance.now()-t0);
@@ -441,10 +558,25 @@ const Controller = {
       const classes = model.meta?.classes || [];
       for(let i=0;i<rows.length;i++){
         const rec = rows[i];
-        const pred = this.runtime.predictOne(rec, {w, alpha, rej});
-        const out = { pred_cluster: pred.label, p_max: +pred.pmax.toFixed(6) };
-        classes.forEach((c,idx)=>{ out['P_'+c] = +pred.Pfused[idx].toFixed(6); });
-        results.push({...rec, ...out});
+
+        // --- 每行校验 ---
+        const v = InputRules.validateRecord(rec, model);
+        let qc_flag = '';
+        if(v.missingRatio > 0.30) qc_flag = 'MISSING>30%';
+        if(v.problems.length){ qc_flag = (qc_flag? qc_flag+'|' : '') + v.problems.join('|'); }
+
+        if(qc_flag){
+          const out = { pred_cluster: 'Uncertain', p_max: 0, qc_flag };
+          classes.forEach((c,idx)=>{ out['P_'+c] = 0; });
+          results.push({...rec, ...out});
+        }else{
+          const pred = this.runtime.predictOne(rec, {w, alpha, rej});
+          const out = { pred_cluster: pred.label, p_max: +pred.pmax.toFixed(6), qc_flag };
+          classes.forEach((c,idx)=>{ out['P_'+c] = +pred.Pfused[idx].toFixed(6); });
+          results.push({...rec, ...out});
+        }
+        // ----------------
+
         if((i+1)%50===0) View.setBatchState(`Processed ${i+1}/${rows.length}…`);
       }
       View.setBatchState(`Done ${rows.length}`);
