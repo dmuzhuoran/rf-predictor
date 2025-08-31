@@ -75,15 +75,24 @@
 
     #result{min-height:120px;padding:6px 2px}
   
-/* === Added by GPT-5 Thinking: spacing tweaks === */
-#result{
-  white-space: pre;        /* keep monospaced alignment */
-  letter-spacing: 0.5px;   /* slight character spacing */
-  word-spacing: 18px;      /* widen gaps between columns */
-  line-height: 1.85;
+/* === Added by GPT-5: improved table layout for results === */
+.result-table {
+  border-collapse: collapse;
+  margin-top: 10px;
+  width: 100%;
+}
+.result-table th, .result-table td {
+  padding: 6px 18px;
+  border-bottom: 1px solid var(--bd);
+  text-align: center;
+}
+.result-table th {
+  background: var(--accent-weak);
+  color: var(--txt);
+  font-weight: 700;
 }
 /* push the Predict/Reset buttons a bit lower */
-.single-actions { margin-top: 10px; }
+.single-actions { margin-top: 12px; }
 
   </style>
 </head>
@@ -145,7 +154,14 @@
 
     <div class="card">
       <label>Results</label>
-      <div id="result" class="mono"></div>
+      <div id="result" class="mono">
+        <table class="result-table">
+          <thead><tr><th>Class</th><th>Fused Probability</th><th>Centroid Similarity</th></tr></thead>
+          <tbody id="resultBody">
+            <tr><td colspan="3" style="text-align:center;color:var(--muted)">No results yet</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
