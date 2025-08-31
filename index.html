@@ -74,6 +74,17 @@
     }
 
     #result{min-height:120px;padding:6px 2px}
+  
+/* === Added by GPT-5 Thinking: spacing tweaks === */
+#result{
+  white-space: pre;        /* keep monospaced alignment */
+  letter-spacing: 0.5px;   /* slight character spacing */
+  word-spacing: 18px;      /* widen gaps between columns */
+  line-height: 1.85;
+}
+/* push the Predict/Reset buttons a bit lower */
+.single-actions { margin-top: 10px; }
+
   </style>
 </head>
 <body>
@@ -112,7 +123,7 @@
         <div class="card">
           <label>Single Case</label>
           <form id="inputForm"></form>
-          <div class="row">
+          <div class="row single-actions">
             <button id="predictBtn" class="primary" disabled>Predict</button>
             <button id="resetBtn" class="muted" disabled>Reset</button>
             <span id="predState" class="mono"></span>
