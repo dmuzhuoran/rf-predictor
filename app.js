@@ -599,3 +599,46 @@ const Controller = {
 };
 
 Controller.bind();
+
+
+/* =========================
+   Non-invasive patch (table fill)
+   - Keeps original behavior intact
+   - Additionally writes rows into <tbody id="resultBody">
+   ========================= */
+(function(){
+  const tbody = document.getElementById('resultBody');
+  if(!tbody) return; // if the table is not present, do nothing
+
+  // keep a reference to the original renderResult
+  const _orig = View.renderResult.bind(View);
+
+  // override with a wrapper
+  View.renderResult = function(model, pred, ms, extraNote){
+    // call original to keep existing UI behavior
+    _orig(model, pred, ms, extraNote);
+
+    // then fill the dedicated table if it exists
+    try{
+      // if Uncertain (auto-reject), show a single note row
+      if(pred.label === 'Uncertain' && (!pred.Pfused || pred.Pfused.every(v => !v))){
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--muted)">Auto-rejected: missing rate > 30%</td></tr>`;
+        return;
+      }
+
+      const classes = (model.meta && model.meta.classes) || [];
+      tbody.innerHTML = '';
+      const K = Math.max(pred.Pfused?.length||0, pred.S?.length||0);
+      for(let i=0;i<K;i++){
+        const c = classes[i] ?? (i+1);
+        const p = (pred.Pfused && Number.isFinite(pred.Pfused[i])) ? pred.Pfused[i] : 0;
+        const s = (pred.S && Number.isFinite(pred.S[i])) ? pred.S[i] : 0;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${c}</td><td>${p.toFixed(6)}</td><td>${s.toFixed(6)}</td>`;
+        tbody.appendChild(tr);
+      }
+    }catch(e){
+      console.error('Result table render failed:', e);
+    }
+  };
+})();
