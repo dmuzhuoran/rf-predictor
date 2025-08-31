@@ -1,35 +1,63 @@
 
 /**
- * result_table_inplace.js
- * Render the 3-class table exactly where the current text shows the
- * "Class Fused probability Centroid similarity" section.
- * - Keeps the lines above (e.g., auto-reject, predicted subtype).
- * - Replaces only the "Class …" 3-line block with a styled table.
- * - Watches #result for updates; works with subsequent predictions.
- * - No changes to your existing app logic.
+ * result_table_inplace_v2.js
+ * Robust in-place renderer:
+ *  - Debounced MutationObserver (handles rapid rewrites).
+ *  - Parses from element.innerText (tolerates <br/> etc.).
+ *  - Replaces ONLY the "Class Fused probability Centroid similarity" block
+ *    with a 3-column table at the SAME spot, keeping the lines above intact.
+ *  - Works on every new prediction.
+ *  - Exposes window.__fillTable(fused, similarity) to force a render in place.
  */
 (function(){
   'use strict';
 
-  const resultBox = document.getElementById('result');
-  if(!resultBox) return;
+  const box = document.getElementById('result');
+  if (!box) return;
 
-  // regex to capture numeric rows (supports ints, decimals, scientific)
-  const NUM = String.raw`[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:e[+-]?\\d+)?`;
-  const rowRe = new RegExp(String.raw`^(\\d+)\\s+(${NUM})\\s+(${NUM})$`, "i");
-  const headerRe = /^Class\s+Fused\s+probability\s+Centroid\s+similarity/i;
+  // tolerant header & numeric row detection
+  const HEADER_RE = /class\s+fused\s+probability\s+centroid\s+similarity/i;
+  const NUM_SRC = String.raw`[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:e[+-]?\\d+)?`;
+  const ROW_RE = new RegExp(String.raw`^\\s*(\\d+)\\s+(${NUM_SRC})\\s+(${NUM_SRC})\\s*$`, 'i');
 
-  function esc(s){
-    return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const to6 = (x) => Number.isFinite(x) ? x.toFixed(6) : "0.000000";
+  const esc = (s) => s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+  function getLines() {
+    // use innerText so line breaks from <br> are preserved
+    let txt = (box.innerText ?? box.textContent ?? "");
+    // normalize NBSP and multiple spaces to single spaces for robust matching
+    txt = txt.replace(/\u00A0/g, ' ');
+    return txt.split(/\r?\n/);
   }
 
-  function buildTableHTML(fused, sim){
-    const to6 = x => Number.isFinite(x) ? x.toFixed(6) : "0.000000";
-    let rows = "";
+  function parse() {
+    const lines = getLines();
+    const idx = lines.findIndex(line => HEADER_RE.test(line));
+    if (idx < 0) return null;
+
+    const fused=[], sim=[];
+    for (let i=1;i<=3;i++) {
+      const raw = (lines[idx+i] || "").replace(/\s{2,}/g, ' ').trim();
+      const m = raw.match(ROW_RE);
+      if (m) {
+        fused.push(parseFloat(m[2]));
+        sim.push(parseFloat(m[3]));
+      }
+    }
+    const prefix = lines.slice(0, idx).join('\n').trimEnd();
+    return { prefix, fused, sim };
+  }
+
+  function buildTableHTML(fused, sim) {
     const K = Math.max(3, fused.length, sim.length);
-    for(let i=0;i<K;i++){
-      const c = i+1, p = fused[i], s = sim[i];
-      rows += `<tr><td>${c}</td><td>${to6(p)}</td><td>${to6(s)}</td></tr>`;
+    let rows = "";
+    for (let i=0;i<K;i++) {
+      rows += `<tr>
+        <td>${i+1}</td>
+        <td>${to6(fused[i])}</td>
+        <td>${to6(sim[i])}</td>
+      </tr>`;
     }
     return `
 <table class="result-table" style="border-collapse:collapse;margin-top:10px;width:100%">
@@ -46,66 +74,38 @@
 </table>`;
   }
 
-  function renderInPlaceFromText(txt){
-    if(!txt) return false;
-    const lines = txt.split(/\r?\n/);
+  function renderInPlaceFromCurrentText() {
+    const parsed = parse();
+    if (!parsed || !parsed.fused.length) return false;
 
-    // find the "Class …" header
-    let start = -1;
-    for(let i=0;i<lines.length;i++){
-      if(headerRe.test(lines[i].trim())) { start = i; break; }
-    }
-    if(start < 0) return false;
-
-    // parse 3 rows after header
-    let fused=[], sim=[];
-    for(let i=1;i<=3;i++){
-      const m = (lines[start+i]||"").trim().match(rowRe);
-      if(m){
-        fused.push(parseFloat(m[2]));
-        sim.push(parseFloat(m[3]));
-      }
-    }
-
-    // prefix text (everything before the header) we keep as-is (with <br>)
-    const prefix = lines.slice(0, start).join("\n").trimEnd();
-
-    // build final HTML: prefix lines (preserved) + table
-    const prefixHTML = prefix ? `<div class="mono">${esc(prefix).replace(/\n/g,"<br>")}</div>` : "";
-    const tableHTML  = buildTableHTML(fused, sim);
-
-    // Write back (replace only the section starting at header)
-    // Simpler strategy: replace entire innerHTML with prefix + table.
-    // Your app usually sets resultBox.innerText per prediction, so we'll
-    // watch and re-run for new predictions.
-    resultBox.innerHTML = prefixHTML + tableHTML;
+    const prefixHTML = parsed.prefix
+      ? `<div class="mono">${esc(parsed.prefix).replace(/\n/g, "<br>")}</div>`
+      : "";
+    const tableHTML = buildTableHTML(parsed.fused, parsed.sim);
+    box.innerHTML = prefixHTML + tableHTML;
     return true;
   }
 
-  // Try once immediately
-  renderInPlaceFromText(resultBox.textContent || "");
+  // Debounced observer so our render wins after the app finishes writing
+  let t = null;
+  const schedule = () => {
+    clearTimeout(t);
+    t = setTimeout(renderInPlaceFromCurrentText, 80); // 80ms debounce
+  };
 
-  // Watch for prediction updates
-  const obs = new MutationObserver(() => {
-    // If new text still has the "Class …" header, re-render into table
-    // If result already contains our table but no text header, do nothing
-    // (it means we've already converted).
-    const txt = resultBox.textContent || "";
-    if (headerRe.test(txt)) renderInPlaceFromText(txt);
-  });
-  obs.observe(resultBox, { childList:true, subtree:true, characterData:true });
+  // Initial attempt (in case results already present)
+  renderInPlaceFromCurrentText();
 
-  // Optional: manual API (also renders at the same location below the prefix)
-  window.__fillTable = function(fused=[], similarity=[]){
-    // Build a minimal prefix using current text up to (but not including) header
-    const txt = resultBox.textContent || "";
-    const lines = txt.split(/\r?\n/);
-    let start = -1;
-    for(let i=0;i<lines.length;i++){
-      if(headerRe.test(lines[i].trim())) { start = i; break; }
-    }
-    const prefix = start>=0 ? lines.slice(0,start).join("\n").trimEnd() : txt.trimEnd();
-    const prefixHTML = prefix ? `<div class="mono">${esc(prefix).replace(/\n/g,"<br>")}</div>` : "";
-    resultBox.innerHTML = prefixHTML + buildTableHTML(fused, similarity);
+  const obs = new MutationObserver(schedule);
+  obs.observe(box, { childList:true, subtree:true, characterData:true });
+
+  // Manual API: write at the same location
+  window.__fillTable = function(fused=[], similarity=[]) {
+    // Use current prefix if available, otherwise keep existing content above
+    const lines = getLines();
+    const idx = lines.findIndex(line => HEADER_RE.test(line));
+    const prefix = (idx >= 0 ? lines.slice(0, idx).join('\n') : lines.join('\n')).trimEnd();
+    const prefixHTML = prefix ? `<div class="mono">${esc(prefix).replace(/\n/g, "<br>")}</div>` : "";
+    box.innerHTML = prefixHTML + buildTableHTML(fused, similarity);
   };
 })();
