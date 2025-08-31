@@ -1,5 +1,5 @@
 /* =========================
-   功能模块（Core Layer）
+   Core Layer
    ========================= */
 const MathKit = {
   sigmoid: x => 1/(1+Math.exp(-x)),
@@ -20,7 +20,7 @@ const CSVKit = {
     const header = lines[0].split(',').map(h=>h.trim());
     const rows = [];
     for(let i=1;i<lines.length;i++){
-      const cols = lines[i].split(','); // 简化：不处理复杂转义
+      const cols = lines[i].split(','); // simplified: no complex escaping
       const rec = {};
       header.forEach((h,idx)=>{ rec[h] = (cols[idx]!==undefined? cols[idx].trim() : ''); });
       rows.push(rec);
@@ -78,7 +78,7 @@ class Preprocessor {
     }else{
       baseNames.forEach(k=>{
         const v = input[k];
-        if(v===undefined || v==='') throw new Error(`缺少已标准化特征：${k}`);
+        if(v===undefined || v==='') throw new Error(`Missing standardized feature: ${k}`);
         feats[k] = parseFloat(v);
       });
     }
@@ -184,7 +184,7 @@ class ModelRuntime {
   predictOne(record, override = {}){
     const w = override.w ?? this.meta.fusionWeight ?? 0.7;
     const alpha = override.alpha ?? this.meta.alphaDist ?? 1.0;
-    const rej = override.rej ?? this.meta.rejectThreshold ?? 0.7;
+    const rej = override.rej ?? this.meta.rejectThreshold ?? 0.7; // default 0.70
 
     const feats = this.prep.toBaseFeats(record);
     const PCs  = this.pca.project(feats);
@@ -211,7 +211,7 @@ class ModelRuntime {
 }
 
 /* =========================
-   展示模块（UI Layer）
+   View Layer (UI) — Fault-tolerant for missing placeholders
    ========================= */
 const View = {
   els: {
@@ -238,29 +238,31 @@ const View = {
     result:    document.getElementById('result')
   },
 
-  setLoadState(msg){ this.els.loadState.textContent = msg; },
-  setPredState(msg){ this.els.predState.textContent = msg; },
-  setBatchState(msg){ this.els.batchState.textContent = msg; },
+  setLoadState(msg){ if (this.els.loadState) this.els.loadState.textContent = msg; },
+  setPredState(msg){ if (this.els.predState) this.els.predState.textContent = msg; },
+  setBatchState(msg){ if (this.els.batchState) this.els.batchState.textContent = msg; },
 
   enableAfterLoad(){
-    this.els.predictBtn.disabled=false;
-    this.els.resetBtn.disabled=false;
-    this.els.batchBtn.disabled=false;
-    this.els.tplBtn.disabled=false;
+    if (this.els.predictBtn) this.els.predictBtn.disabled=false;
+    if (this.els.resetBtn)   this.els.resetBtn.disabled=false;
+    if (this.els.batchBtn)   this.els.batchBtn.disabled=false;
+    if (this.els.tplBtn)     this.els.tplBtn.disabled=false;
   },
 
   renderMeta(model){
+    if (!this.els.modelMeta) return; // tolerate missing meta placeholder
     const meta = model.meta || {};
     const cls = (meta.classes || model.rf?.classes || []).join(', ');
     const hasImpute = !!model.impute;
     const hasNorm = !!model.normalize;
     this.els.modelMeta.innerHTML =
-      `类别：<b>${cls}</b> ｜ 主成分数：<b>${(model.pca?.pcNames||[]).length}</b> ｜ 树数：<b>${model.rf?.trees?.length||0}</b><br>` +
-      `预处理：${hasImpute?'插补✓':'插补×'}；${hasNorm?'标准化✓':'标准化×'}；PCA✓`;
+      `Classes: <b>${cls}</b> | #PCs: <b>${(model.pca?.pcNames||[]).length}</b> | Trees: <b>${model.rf?.trees?.length||0}</b><br>` +
+      `Preprocessing: ${hasImpute?'Imputation ✓':'Imputation ×'}; ${hasNorm?'Standardization ✓':'Standardization ×'}; PCA ✓`;
   },
 
   renderForm(model){
     const wrap = this.els.inputForm;
+    if (!wrap) return;
     wrap.innerHTML = '';
 
     const fieldNumber = (name)=>{
@@ -278,7 +280,7 @@ const View = {
 
       facKeys.forEach(k=>{
         const sel = document.createElement('select'); sel.id = 'fld_'+k;
-        const opt0 = document.createElement('option'); opt0.value=''; opt0.textContent='(缺失)'; sel.appendChild(opt0);
+        const opt0 = document.createElement('option'); opt0.value=''; opt0.textContent='(missing)'; sel.appendChild(opt0);
         (catLevels[k]||[]).forEach(v=>{
           const o = document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o);
         });
@@ -289,7 +291,7 @@ const View = {
       baseNames.forEach(k=>wrap.appendChild(fieldNumber(k)));
       const warn = document.createElement('div');
       warn.className='hint warn';
-      warn.textContent = '当前模型不含插补/标准化参数：请提供“已插补 + 已标准化”的数值，并与 featureNames 完全对齐。';
+      warn.textContent = 'Model lacks imputation/standardization params: please provide pre-imputed & standardized values aligned with featureNames.';
       wrap.appendChild(warn);
     }
   },
@@ -303,6 +305,7 @@ const View = {
 
   readSingleInput(model){
     const record = {};
+    if (!this.els.inputForm) return record;
     if(model.impute){
       const numKeys = Object.keys(model.impute.numeric||{});
       const facKeys = Object.keys(model.impute.factor||{});
@@ -326,16 +329,18 @@ const View = {
 
   clearForm(){
     this.setPredState('');
-    this.els.result.textContent='尚无结果';
+    if (this.els.result) this.els.result.textContent='No results yet';
+    if (!this.els.inputForm) return;
     this.els.inputForm.querySelectorAll('input,select').forEach(el=>el.value='');
   },
 
   renderResult(model, pred, ms){
+    if (!this.els.result) return;
     const cls = model.meta.classes || [];
     const rows = pred.Pfused.map((p,i)=>`<tr><td>${cls[i]||i}</td><td>${p.toFixed(6)}</td><td>${pred.S[i].toFixed(6)}</td></tr>`).join('');
     this.els.result.innerHTML =
-      `<p>预测分型：<b>${pred.label}</b> ｜ 置信度 p<sub>max</sub>=<b>${pred.pmax.toFixed(6)}</b> ｜ 用时 ${ms.toFixed(1)} ms</p>
-       <table><thead><tr><th>分型</th><th>融合后概率</th><th>中心相似度</th></tr></thead><tbody>${rows}</tbody></table>`;
+      `<p>Predicted subtype: <b>${pred.label}</b> | Confidence p<sub>max</sub>=<b>${pred.pmax.toFixed(6)}</b> | Time ${ms.toFixed(1)} ms</p>
+       <table><thead><tr><th>Class</th><th>Fused probability</th><th>Centroid similarity</th></tr></thead><tbody>${rows}</tbody></table>`;
   },
 
   downloadBlob(filename, blob){
@@ -346,6 +351,7 @@ const View = {
   },
 
   showDownloadLink(blob){
+    if (!this.els.dlLink) return;
     const url = URL.createObjectURL(blob);
     this.els.dlLink.href = url;
     this.els.dlLink.style.display='inline-block';
@@ -353,32 +359,32 @@ const View = {
 };
 
 /* =========================
-   控制器（事件与协调）
+   Controller (events)
    ========================= */
 const Controller = {
   runtime: null,
 
   async onLoadModel(){
-    View.setLoadState('加载中…');
-    const url = (View.els.modelUrl.value || 'model.json').trim();
+    View.setLoadState('Loading…');
+    const url = (View.els.modelUrl?.value || 'model.json').trim();
     try{
       const res = await fetch(url, {cache:'no-store'});
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const model = await res.json();
 
       const meta = model.meta || {};
-      View.els.wInput.value     = meta.fusionWeight ?? 0.7;
-      View.els.alphaInput.value = meta.alphaDist ?? 1.0;
-      View.els.rejInput.value   = meta.rejectThreshold ?? 0.7;
+      if (View.els.wInput)     View.els.wInput.value     = meta.fusionWeight ?? 0.7;
+      if (View.els.alphaInput) View.els.alphaInput.value = meta.alphaDist ?? 1.0;
+      if (View.els.rejInput)   View.els.rejInput.value   = meta.rejectThreshold ?? 0.7;
 
       this.runtime = new ModelRuntime(model);
       View.renderForm(model);
       View.renderMeta(model);
       View.enableAfterLoad();
-      View.setLoadState('已加载');
+      View.setLoadState('Loaded');
     }catch(e){
       console.error(e);
-      View.setLoadState('加载失败：' + e.message);
+      View.setLoadState('Load failed: ' + e.message);
     }
   },
 
@@ -395,42 +401,42 @@ const Controller = {
   },
 
   onPredictOne(){
-    if(!this.runtime){ alert('请先加载模型'); return; }
+    if(!this.runtime){ alert('Please load the model first'); return; }
     const t0 = performance.now();
     const model = this.runtime.model;
 
-    const w = parseFloat(View.els.wInput.value || (model.meta?.fusionWeight ?? 0.7));
-    const alpha = parseFloat(View.els.alphaInput.value || (model.meta?.alphaDist ?? 1.0));
-    const rej = parseFloat(View.els.rejInput.value || (model.meta?.rejectThreshold ?? 0.7));
+    const w = parseFloat(View.els.wInput?.value || (model.meta?.fusionWeight ?? 0.7));
+    const alpha = parseFloat(View.els.alphaInput?.value || (model.meta?.alphaDist ?? 1.0));
+    const rej = parseFloat(View.els.rejInput?.value || (model.meta?.rejectThreshold ?? 0.7));
 
     try{
       const record = View.readSingleInput(model);
       const pred = this.runtime.predictOne(record, {w, alpha, rej});
-      View.setPredState('完成');
+      View.setPredState('Done');
       View.renderResult(model, pred, performance.now()-t0);
     }catch(e){
       console.error(e);
-      View.setPredState('失败：' + e.message);
+      View.setPredState('Failed: ' + e.message);
     }
   },
 
   async onBatchPredict(){
-    if(!this.runtime){ alert('请先加载模型'); return; }
-    const file = View.els.csvFile.files[0];
-    if(!file){ alert('请选择 CSV 文件'); return; }
+    if(!this.runtime){ alert('Please load the model first'); return; }
+    const file = View.els.csvFile?.files?.[0];
+    if(!file){ alert('Please choose a CSV file'); return; }
 
     const model = this.runtime.model;
-    const w = parseFloat(View.els.wInput.value || (model.meta?.fusionWeight ?? 0.7));
-    const alpha = parseFloat(View.els.alphaInput.value || (model.meta?.alphaDist ?? 1.0));
-    const rej = parseFloat(View.els.rejInput.value || (model.meta?.rejectThreshold ?? 0.7));
+    const w = parseFloat(View.els.wInput?.value || (model.meta?.fusionWeight ?? 0.7));
+    const alpha = parseFloat(View.els.alphaInput?.value || (model.meta?.alphaDist ?? 1.0));
+    const rej = parseFloat(View.els.rejInput?.value || (model.meta?.rejectThreshold ?? 0.7));
 
     try{
-      View.setBatchState('解析中…');
+      View.setBatchState('Parsing…');
       const text = await file.text();
       const {rows} = CSVKit.parse(text);
-      if(!rows.length) throw new Error('空文件');
+      if(!rows.length) throw new Error('Empty file');
 
-      View.setBatchState(`共 ${rows.length} 条，预测中…`);
+      View.setBatchState(`Total ${rows.length}, predicting…`);
       const results = [];
       const classes = model.meta?.classes || [];
       for(let i=0;i<rows.length;i++){
@@ -439,26 +445,25 @@ const Controller = {
         const out = { pred_cluster: pred.label, p_max: +pred.pmax.toFixed(6) };
         classes.forEach((c,idx)=>{ out['P_'+c] = +pred.Pfused[idx].toFixed(6); });
         results.push({...rec, ...out});
-        if((i+1)%50===0) View.setBatchState(`已完成 ${i+1}/${rows.length}…`);
+        if((i+1)%50===0) View.setBatchState(`Processed ${i+1}/${rows.length}…`);
       }
-      View.setBatchState(`完成 ${rows.length} 条`);
+      View.setBatchState(`Done ${rows.length}`);
       const csv = CSVKit.toCSV(results);
       const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
       View.showDownloadLink(blob);
     }catch(e){
       console.error(e);
-      View.setBatchState('失败：' + e.message);
+      View.setBatchState('Failed: ' + e.message);
     }
   },
 
   bind(){
-    View.els.loadBtn.addEventListener('click', ()=>this.onLoadModel());
-    View.els.tplBtn.addEventListener('click', ()=>this.onDownloadTemplate());
-    View.els.resetBtn.addEventListener('click', ()=>this.onReset());
-    View.els.predictBtn.addEventListener('click', ()=>this.onPredictOne());
-    View.els.batchBtn.addEventListener('click', ()=>this.onBatchPredict());
+    View.els.loadBtn?.addEventListener('click', ()=>this.onLoadModel());
+    View.els.tplBtn?.addEventListener('click', ()=>this.onDownloadTemplate());
+    View.els.resetBtn?.addEventListener('click', ()=>this.onReset());
+    View.els.predictBtn?.addEventListener('click', ()=>this.onPredictOne());
+    View.els.batchBtn?.addEventListener('click', ()=>this.onBatchPredict());
   }
 };
 
 Controller.bind();
-
