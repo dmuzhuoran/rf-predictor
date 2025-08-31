@@ -75,24 +75,23 @@
 
     #result{min-height:120px;padding:6px 2px}
   
-/* === Added by GPT-5: improved table layout for results === */
-.result-table {
-  border-collapse: collapse;
-  margin-top: 10px;
-  width: 100%;
-}
-.result-table th, .result-table td {
-  padding: 6px 18px;
-  border-bottom: 1px solid var(--bd);
-  text-align: center;
-}
-.result-table th {
-  background: var(--accent-weak);
-  color: var(--txt);
-  font-weight: 700;
-}
-/* push the Predict/Reset buttons a bit lower */
-.single-actions { margin-top: 12px; }
+    .result-table {
+      border-collapse: collapse;
+      margin-top: 10px;
+      width: 100%;
+    }
+    .result-table th, .result-table td {
+      padding: 6px 18px;
+      border-bottom: 1px solid var(--bd);
+      text-align: center;
+    }
+    .result-table th {
+      background: var(--accent-weak);
+      color: var(--txt);
+      font-weight: 700;
+    }
+    /* push the Predict/Reset buttons a bit lower */
+    .single-actions { margin-top: 12px; }
 
   </style>
 </head>
@@ -165,6 +164,7 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js"></script>
+  <!-- Load the patched JS that writes into resultBody without changing your original logic -->
+  <script type="module" src="./app_v2.js"></script>
 </body>
 </html>
