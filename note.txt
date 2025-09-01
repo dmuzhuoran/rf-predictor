@@ -1,0 +1,7 @@
+We established an end-to-end modeling pipeline that enables raw clinical variables with missing values to be directly used for subtype prediction. The workflow consisted of:
+(1) stratified train–validation split;
+(2) unified preprocessing including imputation, standardization, and feature encoding;
+(3) principal component analysis (PCA) retaining ≥90% of cumulative variance;
+(4) training a random forest classifier on the principal components with probability outputs;
+(5) probability calibration on the validation set;
+(6) combining calibrated probabilities with class centroids in the PC space through a probability–distance fusion scheme, with a rejection threshold of 0.70 for uncertain cases.
