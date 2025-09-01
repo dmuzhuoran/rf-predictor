@@ -93,7 +93,7 @@
   <div id="panel-predict" class="panel active" role="tabpanel" aria-labelledby="tabPredict">
     <div class="container">
       <div class="card">
-        <label>Parameters</label>
+        <label>Parameters(default)</label>
         <div class="inputs-3">
           <div>
             <label for="wInput">Fusion Weight (w)</label>
@@ -147,7 +147,6 @@
   <div id="panel-notes" class="panel" role="tabpanel" aria-labelledby="tabNotes">
     <div class="container">
       <div class="card">
-        <label>Notes</label>
         <div class="row">
           <div class="col">
             <div class="img-wrap">
@@ -156,9 +155,20 @@
           </div>
           <div class="col">
             <!-- NOTE_TEXT_START -->
-            <p class="note-text">This project is for GPSD clinical subtype prediction.
-It shows a default image on the Notes tab and this static text loaded directly from the HTML.
-You can change this paragraph by editing the HTML between NOTE_TEXT_START/END markers.</p>
+            <div id="note-container" class="note-text"></div>
+
+<script>
+fetch("note.txt")   // 路径相对于 index.html
+  .then(response => response.text())
+  .then(text => {
+    document.getElementById("note-container").innerText = text;
+  })
+  .catch(err => {
+    document.getElementById("note-container").innerText = "⚠️ Failed to load notes.";
+    console.error(err);
+  });
+</script>
+
             <!-- NOTE_TEXT_END -->
           </div>
         </div>
