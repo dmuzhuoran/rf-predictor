@@ -71,7 +71,15 @@
     .img-wrap{ display:flex; justify-content:center; align-items:center; background:#fff; border:1px dashed var(--bd); border-radius:12px; padding:10px; min-height:240px;}
     .img-wrap img{ max-width:100%; max-height:520px; border-radius:12px; }
 
-    .note-text { white-space:pre-line; font-size:14px; color:#0f172a; line-height:1.7; }
+    ..note-text {
+  white-space: pre-line;  /* 自动根据 txt 换行 */
+  font-size: 18px;        /* 调整字号 */
+  font-family: "Times New Roman", serif; /* 改字体 */
+  color: black;         /* 改颜色 */
+  line-height: 1.8;       /* 调整行距 */
+  text-align: justify;    /* 两端对齐 */
+  font-weight: 500;       /* 半粗体 */
+}
     .help { font-size:12px; color:var(--muted); margin-top:6px;}
   </style>
 </head>
