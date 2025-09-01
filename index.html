@@ -167,15 +167,9 @@
             <div id="note-container" class="note-text"></div>
 
 <script>
-fetch("note.txt")   // 路径相对于 index.html
-  .then(response => response.text())
-  .then(text => {
-    document.getElementById("note-container").innerText = text;
-  })
-  .catch(err => {
-    document.getElementById("note-container").innerText = "⚠️ Failed to load notes.";
-    console.error(err);
-  });
+fetch("note.txt")
+  .then(r => r.text())
+  .then(t => document.getElementById("note-container").innerHTML = t);
 </script>
 
             <!-- NOTE_TEXT_END -->
